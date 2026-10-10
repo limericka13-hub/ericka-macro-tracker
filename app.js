@@ -24,6 +24,86 @@ const BUILDER_DRAFT_UUID = '00000000-0000-0000-0000-000000000002';
 const CARRIES_UUID = '00000000-0000-0000-0000-000000000003';
 // A carry that would take a day's target below this gets a warning.
 const CARRY_FLOOR_KCAL = 1200;
+// Each food's serving type (per 100 ml, per slice...), parked the same way.
+// { foodId: unit } for every food not measured in grams, or
+// { foodId: { unit, qty } } when its serving is not a whole number - kept
+// here exactly, whatever the food table's Quantity column can hold.
+const FOOD_UNITS_UUID = '00000000-0000-0000-0000-000000000004';
+
+// The serving types a food can be measured in. A food's macros are quoted per
+// `Quantity` of its unit, and every amount logged against it is in that unit
+// too - so the arithmetic is the same for all of them, only the names change.
+// `base` is the serving a new food starts at; `count` units (a slice, a
+// scoop) start the Meal Builder at one serving rather than an empty box.
+const FOOD_UNITS = [
+  { id: 'g', label: 'g', name: 'Grams (g)', base: 100 },
+  { id: 'ml', label: 'ml', name: 'Millilitres (ml)', base: 100 },
+  { id: 'l', label: 'L', name: 'Litres (L)', base: 1, spaced: true },
+  { id: 'kg', label: 'kg', name: 'Kilograms (kg)', base: 1, spaced: true },
+  { id: 'unit', label: 'unit', plural: 'units', name: 'Units (e.g. 1 egg)', base: 1, count: true },
+  { id: 'serving', label: 'serving', plural: 'servings', name: 'Servings', base: 1, count: true },
+  { id: 'slice', label: 'slice', plural: 'slices', name: 'Slices', base: 1, count: true },
+  { id: 'scoop', label: 'scoop', plural: 'scoops', name: 'Scoops', base: 1, count: true },
+  { id: 'cup', label: 'cup', plural: 'cups', name: 'Cups', base: 1, count: true },
+  { id: 'tbsp', label: 'tbsp', name: 'Tablespoons (tbsp)', base: 1, count: true },
+  { id: 'tsp', label: 'tsp', name: 'Teaspoons (tsp)', base: 1, count: true }
+];
+
+// "1 day", "3 days" - a count with the right noun, rather than "day(s)".
+function plural(n, one, many = `${one}s`) {
+  return `${Number(n).toLocaleString()} ${Number(n) === 1 ? one : many}`;
+}
+
+function unitInfo(id) {
+  return FOOD_UNITS.find(u => u.id === id) || FOOD_UNITS[0];
+}
+
+// The day a meal in Today's Log was logged on, read from the time stamped
+// into its id when it was logged ("meal-1791..."), as a toDateString() key.
+// null for a meal that carries no such stamp - it counts as today's.
+function mealLoggedDay(meal) {
+  const m = /^meal-(\d{12,})/.exec(String((meal && meal.id) || ''));
+  if (!m) return null;
+  const d = new Date(Number(m[1]));
+  return isNaN(d.getTime()) ? null : d.toDateString();
+}
+
+// The food table may have been set up with whole-number columns. Postgres
+// says so with this error when handed a decimal.
+function isWholeNumberColumnError(err) {
+  return !!err && (err.code === '22P02' ||
+    /invalid input syntax for (type )?(integer|bigint|smallint)/i.test(err.message || ''));
+}
+
+// The unit of a food, a builder row or a logged item - whichever spelling it
+// carries. Anything from before units existed is in grams.
+function unitOfEntry(x) {
+  const id = x && (x.Unit || x.unit);
+  return FOOD_UNITS.some(u => u.id === id) ? id : 'g';
+}
+
+// "150g", "250ml", "0.5 L", "1 slice", "2 scoops", "2 tbsp".
+function formatAmount(qty, unitId) {
+  const n = Number(qty);
+  if (qty === '' || qty === null || qty === undefined || !isFinite(n)) return String(qty ?? '');
+  const u = unitInfo(unitId);
+  const shown = String(Math.round(n * 100) / 100);
+  if (!u.count) return u.spaced ? `${shown} ${u.label}` : `${shown}${u.label}`;
+  return `${shown} ${u.plural && n !== 1 ? u.plural : u.label}`;
+}
+
+// What a food's macros are quoted against: "per 100g", "per slice",
+// "per 2 slices".
+function formatBasis(qty, unitId) {
+  const u = unitInfo(unitId);
+  return u.count && Number(qty) === 1 ? `per ${u.label}` : `per ${formatAmount(qty, unitId)}`;
+}
+
+// The Meal Builder's quantity label: QTY(G), QTY(ML), SLICES, TBSP.
+function qtyLabelFor(unitId) {
+  const u = unitInfo(unitId);
+  return u.count ? (u.plural || u.label).toUpperCase() : `QTY(${u.label.toUpperCase()})`;
+}
 
 // A barcode inside scanner corners. The four bars sit symmetrically about the
 // middle - the old three were off-centre by a pixel, which read as a glitch
@@ -233,6 +313,12 @@ class MacroDataStore {
     this.carriesWritesInFlight = 0;
     this.lastLocalCarriesChange = 0;
     this.carriesSyncFailed = false;
+    // Serving types live on each food as `Unit` while the app runs; the cloud
+    // keeps them in their own row (FOOD_UNITS_UUID), with the same settling
+    // rules as the carries.
+    this.foodUnitsWritesInFlight = 0;
+    this.lastLocalFoodUnitsChange = 0;
+    this.foodUnitsSyncFailed = false;
     this.initSupabase();
   }
 
@@ -568,6 +654,9 @@ class MacroDataStore {
       }
 
       flagError(foodsErr);
+      // The rows below come back without serving types; they are put back
+      // once the logs (where they are kept) have been read.
+      const localUnits = this.foodUnitMap();
       if (foodsData && !foodsErr) {
         this.foods = foodsData.map(f => ({
           id: f.id || generateUUID(),
@@ -666,6 +755,24 @@ class MacroDataStore {
           this.carries = serverCarries;
         }
       }
+      // Serving types: the cloud wins unless a local change is still settling
+      // or the logs could not be read.
+      let unitsToApply = localUnits;
+      if (logsData && !logsErr && !this.isFoodUnitsLocallyDirty()) {
+        const unitsRow = logsData.find(l =>
+          l.id === FOOD_UNITS_UUID ||
+          (l['Log Session'] || l.log_session || '').toString().trim().toUpperCase() === 'FOOD_UNITS'
+        );
+        unitsToApply = {};
+        const raw = unitsRow && (unitsRow['Items Logged'] || unitsRow.items_logged);
+        if (raw) {
+          try {
+            const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) unitsToApply = parsed;
+          } catch (e) {}
+        }
+      }
+      this.applyFoodUnitMap(unitsToApply);
       if (logsData && !logsErr) {
         this.pastLogs = logsData
           .filter(l => {
@@ -673,9 +780,11 @@ class MacroDataStore {
             return l.id !== ACTIVE_DRAFT_UUID
               && l.id !== BUILDER_DRAFT_UUID
               && l.id !== CARRIES_UUID
+              && l.id !== FOOD_UNITS_UUID
               && session !== 'ACTIVE_DRAFT'
               && session !== 'BUILDER_DRAFT'
-              && session !== 'CALORIE_CARRIES';
+              && session !== 'CALORIE_CARRIES'
+              && session !== 'FOOD_UNITS';
           })
           .map(l => ({
             id: l.id || generateUUID(),
@@ -846,19 +955,31 @@ class MacroDataStore {
   }
 
   setSyncStatus(status, errorMessage) {
+    this.syncState = status;
+    this.syncError = status === 'error' ? (errorMessage || '') : '';
+    if (status === 'synced') this.lastSyncedAt = Date.now();
     const btn = document.getElementById('sync-status-circle-btn');
-    if (!btn) return;
-    btn.className = `sync-circle-btn ${status}`;
-    if (status === 'error' && errorMessage) {
-      btn.title = `Supabase sync error: ${errorMessage} (tap to check connection)`;
-    } else {
-      btn.title = 'Supabase Database Status & Sync';
+    if (btn) {
+      btn.className = `sync-circle-btn ${status}`;
+      const words = {
+        synced: 'Everything is synced',
+        syncing: 'Syncing…',
+        offline: 'Offline - your changes will sync when you are back online',
+        error: `Sync problem${errorMessage ? `: ${errorMessage}` : ''}`
+      };
+      btn.title = `${words[status] || 'Sync status'} (tap for details)`;
+      btn.setAttribute('aria-label', btn.title);
     }
+    if (window.app && typeof window.app.refreshSyncDialog === 'function') window.app.refreshSyncDialog();
   }
 
   getTodayTotals() {
+    return this.totalsOfMeals(this.todayMeals);
+  }
+
+  totalsOfMeals(meals) {
     let totals = { kcal: 0, protein: 0, carbs: 0, fat: 0 };
-    this.todayMeals.forEach(meal => {
+    meals.forEach(meal => {
       if (meal.totals) {
         totals.kcal += meal.totals.kcal || 0;
         totals.protein += meal.totals.protein || 0;
@@ -1082,6 +1203,151 @@ class MacroDataStore {
     }
   }
 
+  // ---- food serving types ------------------------------------------------
+
+  // What the synced map keeps for a food beyond its row: its unit when that
+  // is not grams, and its exact serving when that is not a whole number (an
+  // integer Quantity column would have rounded it). null when the row says
+  // it all.
+  foodMapEntry(f) {
+    const unit = unitOfEntry(f);
+    const qty = Number(f.Quantity);
+    if (!isFinite(qty) || Number.isInteger(qty)) return unit === 'g' ? null : unit;
+    return { unit, qty };
+  }
+
+  foodUnitMap() {
+    const map = {};
+    this.foods.forEach(f => {
+      const entry = this.foodMapEntry(f);
+      if (entry !== null) map[f.id] = entry;
+    });
+    return map;
+  }
+
+  applyFoodUnitMap(map) {
+    this.foods.forEach(f => {
+      const entry = map && map[f.id];
+      const unit = typeof entry === 'string' ? entry : (entry && entry.unit);
+      f.Unit = FOOD_UNITS.some(u => u.id === unit) ? unit : 'g';
+      const qty = entry && typeof entry === 'object' ? Number(entry.qty) : NaN;
+      if (isFinite(qty) && qty > 0) f.Quantity = qty;
+    });
+  }
+
+  // Writes a food row (an update when given an id), stepping around what
+  // the table cannot take: a decimal serving in a whole-number column is
+  // rounded (the exact one is in the synced map), then kcal, then the
+  // macros - each only if the table still refuses - and a barcode the table
+  // has no column for is left out.
+  async writeFoodRow(row, id = null) {
+    const send = (r) => id
+      ? this.supabase.from('macro_food_database').update(r).eq('id', id)
+      : this.supabase.from('macro_food_database').insert([r]);
+    const rounded = (r, keys) => {
+      const out = { ...r };
+      keys.forEach(k => {
+        if (!(k in out)) return;
+        const n = Math.round(Number(out[k]) || 0);
+        out[k] = k === 'Quantity' ? Math.max(1, n) : n;
+      });
+      return out;
+    };
+    const roundingSteps = [['Quantity'], ['Quantity', 'Kcal'], ['Quantity', 'Kcal', 'Protein', 'Carb', 'Fat']];
+    let current = row;
+    let { error } = await send(current);
+    let barcodeDropped = false;
+    for (let i = 0; i < 6 && error; i++) {
+      // The next rounding that would actually change something.
+      const next = isWholeNumberColumnError(error)
+        ? roundingSteps.map(keys => rounded(current, keys)).find(r => JSON.stringify(r) !== JSON.stringify(current))
+        : null;
+      if (next) {
+        current = next;
+      } else if ('barcode' in current && !barcodeDropped) {
+        // This database has not had the barcode column added yet. Save the
+        // food without it rather than dropping the row entirely.
+        const { barcode, ...withoutBarcode } = current;
+        current = withoutBarcode;
+        barcodeDropped = true;
+      } else {
+        break;
+      }
+      ({ error } = await send(current));
+    }
+    return { error };
+  }
+
+  isFoodUnitsLocallyDirty() {
+    return this.foodUnitsSyncFailed
+      || this.foodUnitsWritesInFlight > 0
+      || (Date.now() - this.lastLocalFoodUnitsChange) < 4000;
+  }
+
+  async syncFoodUnits() {
+    this.lastLocalFoodUnitsChange = Date.now();
+    if (!this.supabase || !this.session.active) {
+      this.saveLocalMirror();
+      return { success: true };
+    }
+
+    this.foodUnitsWritesInFlight++;
+    try {
+      const map = this.foodUnitMap();
+      if (Object.keys(map).length === 0) {
+        const { error: delErr } = await this.supabase
+          .from('macro_daily_logs')
+          .delete()
+          .eq('id', FOOD_UNITS_UUID);
+        if (delErr) throw delErr;
+        this.foodUnitsSyncFailed = false;
+        return { success: true };
+      }
+
+      const record = {
+        id: FOOD_UNITS_UUID,
+        'Log Session': 'FOOD_UNITS',
+        'Total Kcal': 0,
+        'Total Protein': 0,
+        'Total Carbs': 0,
+        'Total Fat': 0,
+        'Items Logged': JSON.stringify(map)
+      };
+
+      const { error: upsertErr } = await this.supabase
+        .from('macro_daily_logs')
+        .upsert([record], { onConflict: 'id' });
+
+      if (upsertErr) {
+        const { data: updated, error: updErr } = await this.supabase
+          .from('macro_daily_logs')
+          .update(record)
+          .eq('id', FOOD_UNITS_UUID)
+          .select();
+        if (updErr || !updated || updated.length === 0) {
+          const { error: insErr } = await this.supabase
+            .from('macro_daily_logs')
+            .insert([record]);
+          if (insErr) throw upsertErr;
+        }
+      }
+
+      this.foodUnitsSyncFailed = false;
+      return { success: true };
+    } catch (err) {
+      const msg = (err && err.message) || String(err);
+      console.warn('syncFoodUnits failed:', msg);
+      // Local is now the only copy, so a fetch must not overwrite it. It is
+      // pushed again when the connection comes back.
+      this.foodUnitsSyncFailed = true;
+      return { success: false, error: msg };
+    } finally {
+      this.foodUnitsWritesInFlight--;
+      this.lastLocalFoodUnitsChange = Date.now();
+      this.saveLocalMirror();
+    }
+  }
+
   async syncActiveDraft() {
     if (!this.supabase) return;
 
@@ -1181,19 +1447,16 @@ class MacroDataStore {
       // untouched and the column stays optional.
       if (food.barcode) newFood.barcode = food.barcode;
 
-      this.foods.unshift(newFood);
+      // The serving type is not a column: it is kept on the food here and
+      // synced in its own row, so it never goes into the insert. A decimal
+      // serving is kept there exactly too.
+      const local = { ...newFood, Unit: unitOfEntry(food) };
+      this.foods.unshift(local);
+      if (this.foodMapEntry(local) !== null) this.syncFoodUnits();
       if (this.supabase) {
         try {
-          const { error } = await this.supabase.from('macro_food_database').insert([newFood]);
-          if (error && newFood.barcode) {
-            // This database has not had the barcode column added yet. Save the
-            // food without it rather than dropping the row entirely.
-            const { barcode, ...withoutBarcode } = newFood;
-            const retry = await this.supabase.from('macro_food_database').insert([withoutBarcode]);
-            if (retry.error) console.warn("Error inserting food database:", retry.error);
-          } else if (error) {
-            console.warn("Error inserting food database:", error);
-          }
+          const { error } = await this.writeFoodRow(newFood);
+          if (error) console.warn("Error inserting food database:", error);
         } catch (e) {
           console.warn("Error inserting food database:", e);
         }
@@ -1209,17 +1472,19 @@ class MacroDataStore {
   async updateFoodInDatabase(id, patch) {
     const food = this.foods.find(f => f.id === id);
     if (!food) return { success: false, error: 'Food not found' };
+    const entryBefore = JSON.stringify(this.foodMapEntry(food));
     Object.assign(food, patch);
+    if (JSON.stringify(this.foodMapEntry(food)) !== entryBefore) this.syncFoodUnits();
     if (!this.supabase) return { success: true };
     try {
-      const { error } = await this.supabase.from('macro_food_database').update({
+      const { error } = await this.writeFoodRow({
         Item: food.Item,
         Quantity: food.Quantity,
         Kcal: food.Kcal,
         Protein: food.Protein,
         Carb: food.Carb,
         Fat: food.Fat
-      }).eq('id', id);
+      }, id);
       if (error) return { success: false, error: error.message || String(error) };
       return { success: true };
     } catch (e) {
@@ -1229,8 +1494,10 @@ class MacroDataStore {
 
   async deleteFoodFromDatabase(id) {
     const before = this.foods.length;
+    const gone = this.foods.find(f => f.id === id);
     this.foods = this.foods.filter(f => f.id !== id);
     if (before === this.foods.length) return { success: false, error: 'Food not found' };
+    if (gone && this.foodMapEntry(gone) !== null) this.syncFoodUnits();
     if (!this.supabase) return { success: true };
     try {
       const { error } = await this.supabase.from('macro_food_database').delete().eq('id', id);
@@ -1241,10 +1508,21 @@ class MacroDataStore {
     }
   }
 
-  async finishAndArchiveDay(selectedDateStr = null, mergeExistingId = null) {
-    if (this.todayMeals.length === 0) return { success: false, error: 'No meals to log.' };
-    
-    const totals = this.getTodayTotals();
+  // Files meals out of Today's Log into the history under a date: all of
+  // them, or just `onlyMeals` (left over from an earlier day, say), leaving
+  // the rest where they are.
+  async finishAndArchiveDay(selectedDateStr = null, mergeExistingId = null, onlyMeals = null) {
+    const filing = onlyMeals ? this.todayMeals.filter(m => onlyMeals.includes(m)) : this.todayMeals.slice();
+    if (filing.length === 0) return { success: false, error: 'No meals to log.' };
+    const keep = this.todayMeals.filter(m => !filing.includes(m));
+    // Whatever stays in Today's Log is synced; an empty log loses its row.
+    const settleDraft = async () => {
+      this.todayMeals = keep;
+      if (keep.length) await this.syncActiveDraft();
+      else await this.clearActiveDraftRow();
+    };
+
+    const totals = this.totalsOfMeals(filing);
     let baseDate = new Date();
     
     if (selectedDateStr) {
@@ -1279,11 +1557,11 @@ class MacroDataStore {
         } catch(e) {}
         
         if (Array.isArray(existingParsed) && existingParsed.length > 0) {
-          existingLog['Items Logged'] = JSON.stringify([...existingParsed, ...this.todayMeals]);
+          existingLog['Items Logged'] = JSON.stringify([...existingParsed, ...filing]);
         } else {
           existingLog['Items Logged'] = JSON.stringify([
             { name: "Previous Log", totals: {}, items: [{ qty: "Old", name: existingLog['Items Logged'] || 'Log' }] },
-            ...this.todayMeals
+            ...filing
           ]);
         }
 
@@ -1299,14 +1577,13 @@ class MacroDataStore {
            if (updErr) return { success: false, error: updErr.message };
         }
 
-        this.todayMeals = [];
-        await this.clearActiveDraftRow();
+        await settleDraft();
 
-        return { success: true, merged: true };
+        return { success: true, merged: true, count: filing.length };
       }
     }
 
-    const summaryItems = JSON.stringify(this.todayMeals);
+    const summaryItems = JSON.stringify(filing);
     
     const newLog = {
       id: generateUUID(),
@@ -1325,10 +1602,9 @@ class MacroDataStore {
 
     this.pastLogs.unshift(newLog);
 
-    this.todayMeals = [];
-    await this.clearActiveDraftRow();
+    await settleDraft();
 
-    return { success: true, merged: false };
+    return { success: true, merged: false, count: filing.length };
   }
 
   // Archiving a day removes the draft row directly. The dirty markers stop an
@@ -1531,9 +1807,6 @@ class MacroApp {
 
   constructor() {
     this.activeView = 'dashboard';
-    // Pages drawn only while on show, whose data has changed since (Weight
-    // keeps track of its own: see isViewStale).
-    this.staleViews = new Set(['foods']);
     this.suppressBuilderSync = false;
     this.builderSyncTimer = null;
     // The Tracker page shows one day at a time. null means "today" and
@@ -1634,7 +1907,6 @@ class MacroApp {
     // too is what produced two blank rows on load.
     this.bindEvents();
     this.setupSyncTriggers();
-    this.setupPageSwipe();
     this.registerServiceWorker();
     this.setupPwaInstallUI();
     this.enhanceDateInputs();
@@ -1824,14 +2096,21 @@ class MacroApp {
         }
 
         const submitBtn = document.getElementById('login-signin-btn');
+        const submitLabel = document.getElementById('login-signin-label');
         if (submitBtn) submitBtn.disabled = true;
+        if (submitLabel) submitLabel.textContent = 'Signing in…';
+        if (authErrorAlert) authErrorAlert.style.display = 'none';
         const res = await store.signIn(email, password);
         if (submitBtn) submitBtn.disabled = false;
+        if (submitLabel) submitLabel.textContent = 'Sign in';
 
         if (res.error) {
           if (authErrorAlert) {
+            const msg = res.error.message || '';
             authErrorAlert.style.display = 'block';
-            authErrorAlert.textContent = `Notice: ${res.error.message || 'Could not sign in'}.`;
+            authErrorAlert.textContent = /invalid login credentials/i.test(msg)
+              ? "That email and password don't match. Check them and try again."
+              : (msg ? `Could not sign in: ${msg}` : 'Could not sign in. Check your connection and try again.');
           }
           return;
         }
@@ -1861,7 +2140,7 @@ class MacroApp {
           }
         } else if (store.session.active) {
           this.checkAuth();
-          this.showToast(`Account registered & logged in!`, 'success');
+          this.showToast('Account created - welcome!', 'success');
         } else {
           if (authErrorAlert) {
             authErrorAlert.style.display = 'block';
@@ -2030,6 +2309,7 @@ class MacroApp {
       if (offline) store.setSyncStatus('offline');
       else if (justCameBack) {
         if (store.carriesSyncFailed) store.syncCarries();
+        if (store.foodUnitsSyncFailed) store.syncFoodUnits();
         store.fetchCloudData();
       }
     };
@@ -2187,7 +2467,7 @@ class MacroApp {
       ])
     );
     if (this.downloadFile(`macro-tracker-days-${this.exportStamp()}.csv`, 'text/csv', csv)) {
-      this.showToast(`${store.pastLogs.length} day(s) exported`, 'success');
+      this.showToast(`${plural(store.pastLogs.length, 'day')} exported`, 'success');
     }
   }
 
@@ -2197,11 +2477,11 @@ class MacroApp {
       return;
     }
     const csv = this.toCsv(
-      ['Item', 'Serving (g)', 'Kcal', 'Protein (g)', 'Carbs (g)', 'Fat (g)', 'Barcode'],
-      store.foods.map(f => [f.Item, f.Quantity, f.Kcal, f.Protein, f.Carb, f.Fat, f.barcode || ''])
+      ['Item', 'Serving', 'Serving type', 'Kcal', 'Protein (g)', 'Carbs (g)', 'Fat (g)', 'Barcode'],
+      store.foods.map(f => [f.Item, f.Quantity, unitInfo(unitOfEntry(f)).label, f.Kcal, f.Protein, f.Carb, f.Fat, f.barcode || ''])
     );
     if (this.downloadFile(`macro-tracker-foods-${this.exportStamp()}.csv`, 'text/csv', csv)) {
-      this.showToast(`${store.foods.length} food(s) exported`, 'success');
+      this.showToast(`${plural(store.foods.length, 'food')} exported`, 'success');
     }
   }
 
@@ -2215,7 +2495,7 @@ class MacroApp {
       store.weights.map(w => [formatDateDMY(w.date), w.weight])
     );
     if (this.downloadFile(`macro-tracker-weights-${this.exportStamp()}.csv`, 'text/csv', csv)) {
-      this.showToast(`${store.weights.length} weigh-in(s) exported`, 'success');
+      this.showToast(`${plural(store.weights.length, 'weigh-in')} exported`, 'success');
     }
   }
 
@@ -2223,8 +2503,8 @@ class MacroApp {
     const counts = document.getElementById('export-counts');
     if (counts) {
       counts.textContent =
-        `${store.pastLogs.length} archived day(s) · ${store.foods.length} food(s) · ` +
-        `${store.favorites.length} favourite(s) · ${store.weights.length} weigh-in(s)`;
+        `${plural(store.pastLogs.length, 'logged day')} · ${plural(store.foods.length, 'food')} · ` +
+        `${plural(store.favorites.length, 'favorite')} · ${plural(store.weights.length, 'weigh-in')}`;
     }
     this.openModal('export-data-modal');
   }
@@ -2263,9 +2543,7 @@ class MacroApp {
     this.showToast('Signed out', 'success');
   }
 
-  // `fresh` when the page is already drawn up to date - the page swipe's
-  // preview did it - so it is not drawn twice.
-  switchView(viewName, fresh = false) {
+  switchView(viewName) {
     this.activeView = viewName;
     document.querySelectorAll('[data-nav-target]').forEach(b => {
       b.classList.toggle('active', b.getAttribute('data-nav-target') === viewName);
@@ -2274,335 +2552,8 @@ class MacroApp {
     
     const targetPanel = document.getElementById(`panel-${viewName}`);
     if (targetPanel) targetPanel.style.display = 'flex';
-    this.staleViews.delete(viewName);
-    if (fresh) return;
     if (viewName === 'foods') this.renderFoodsList();
     if (viewName === 'weights') setTimeout(() => this.renderWeightChart(), 60);
-  }
-
-  // PAGE SWIPE
-  // A sideways drag across a page - a finger on a phone, the mouse on a
-  // computer - moves to the page beside it, in the bottom bar's order. The
-  // page follows the drag with the next one already alongside it, coming in
-  // from the edge, and goes over to it when let go past a quarter of the
-  // width or flicked; short of that, both slide back. At either end there is
-  // no page to show, so it gives a little and springs back. Vertical drags
-  // stay with the page scroll - the panels are touch-action: pan-y, so the
-  // browser hands over only sideways moves and cancels the pointer the
-  // moment it starts a scroll.
-  setupPageSwipe() {
-    const container = document.getElementById('main-app-container');
-    if (!container || container._pageSwipeReady) return;
-    container._pageSwipeReady = true;
-
-    // Places where a sideways drag already means something, or has to be
-    // left alone: text fields (moving the caret), the week strip (changes
-    // week), the weight chart (pans), and the builder's food suggestions.
-    const OWN_GESTURE = 'input, textarea, select, [contenteditable="true"], .week-strip-card, #weight-chart-wrapper, .food-autocomplete-dropdown';
-    // The phone's own back gesture starts at the screen edges.
-    const EDGE = 24;
-    // Space between the page on show and the one coming in.
-    const GAP = 16;
-
-    let panel = null;
-    // The page beside it that the drag is showing, and which side it is on
-    // (1 to the right, the next page; -1 to the left, the previous one).
-    let incoming = null;
-    let side = 0;
-    let pointerId = null;
-    let startX = 0;
-    let startY = 0;
-    let dx = 0;
-    let decided = false;
-    let dragging = false;
-    let samples = [];
-    // Set by a drag so a click that follows it is not also taken as a tap.
-    let swiped = false;
-    // The tidy-up still due after a slide, run early if a new drag starts
-    // before it is over so a quick second swipe is never dropped.
-    let pending = null;
-
-    const span = () => panel.offsetWidth + GAP;
-    // Quicker the less there is left to travel, so letting go near the end
-    // does not hang about.
-    const slideMs = (left) => Math.round(Math.min(300, Math.max(160, (left / span()) * 360)));
-    const ease = (ms) => `transform ${ms}ms cubic-bezier(0.2, 0.8, 0.2, 1)`;
-
-    const after = (ms, done) => {
-      const timer = setTimeout(() => {
-        pending = null;
-        done();
-      }, ms + 20);
-      pending = { timer, done };
-    };
-    const flush = () => {
-      if (!pending) return;
-      const { timer, done } = pending;
-      pending = null;
-      clearTimeout(timer);
-      done();
-    };
-
-    const pages = () => [...document.querySelectorAll('.mobile-nav-item[data-nav-target]')]
-      .map(b => b.getAttribute('data-nav-target'));
-
-    // The page beside this one in the swipe's direction (1 is the next page,
-    // -1 the previous one), or undefined at either end.
-    const neighbour = (dir) => {
-      const list = pages();
-      const i = list.indexOf(this.activeView);
-      return i < 0 ? undefined : list[i + dir];
-    };
-
-    // A row of chips or anything else that scrolls sideways keeps the drag.
-    const scrollsSideways = (el) => {
-      for (; el && el !== container; el = el.parentElement) {
-        if (el.scrollWidth > el.clientWidth + 1) {
-          const o = getComputedStyle(el).overflowX;
-          if (o === 'auto' || o === 'scroll') return true;
-        }
-      }
-      return false;
-    };
-
-    const PREVIEW_PROPS = ['transition', 'transform', 'willChange', 'position', 'top', 'left', 'width', 'maxHeight', 'overflow', 'pointerEvents'];
-    const clearStyles = (el) => {
-      PREVIEW_PROPS.forEach(k => { el.style[k] = ''; });
-    };
-
-    // The drag's pages share the column. Clipped just outside it, so on a
-    // computer the next page comes in from the column's edge rather than
-    // sitting in the empty margin; on a phone that is the screen's edge.
-    const beginDrag = (e) => {
-      const r = container.getBoundingClientRect();
-      const left = Math.min(r.left, GAP);
-      const right = Math.min(window.innerWidth - r.right, GAP);
-      container.classList.add('page-swiping');
-      container.style.clipPath = `inset(-100vh ${-right}px -100vh ${-left}px)`;
-      // A mouse drag over text starts selecting it before it is a swipe, and
-      // wants a grabbing hand. Only for a mouse: the class restyles the whole
-      // page, a cost a phone would pay right as the drag starts.
-      if (e.pointerType === 'mouse') {
-        document.body.classList.add('page-dragging');
-        const sel = window.getSelection && window.getSelection();
-        if (sel) sel.removeAllRanges();
-      }
-      try { container.setPointerCapture(e.pointerId); } catch (err) { /* already released */ }
-      panel.style.transition = 'none';
-      panel.style.willChange = 'transform';
-    };
-
-    const endDrag = () => {
-      container.classList.remove('page-swiping');
-      container.style.clipPath = '';
-      document.body.classList.remove('page-dragging');
-    };
-
-    // Lays the page beside this one next to it, at the same height, ready
-    // to follow the drag in. Only as tall as the screen shows, so it never
-    // makes the document longer mid-drag.
-    const showIncoming = (dir) => {
-      const name = neighbour(dir);
-      const el = name ? document.getElementById(`panel-${name}`) : null;
-      if (!el) return null;
-      // Foods only redraws while on show, so it is brought up to date here if
-      // anything changed since - it is quick. Weight is not: its chart is
-      // drawn ahead of time (warmUpWeights), and if that has not happened
-      // yet, it is drawn once the page lands rather than mid-drag. A preview
-      // that fails to draw must not take the drag down with it.
-      if (name === 'foods' && this.isViewStale('foods')) {
-        try {
-          this.renderFoodsList();
-          this.staleViews.delete('foods');
-        } catch (err) {
-          console.warn('Page preview:', err);
-        }
-      }
-      el.style.transition = 'none';
-      el.style.position = 'absolute';
-      el.style.top = `${panel.offsetTop}px`;
-      el.style.left = `${panel.offsetLeft}px`;
-      el.style.width = `${panel.offsetWidth}px`;
-      el.style.maxHeight = `${Math.max(0, window.innerHeight - panel.getBoundingClientRect().top)}px`;
-      el.style.overflow = 'hidden';
-      el.style.pointerEvents = 'none';
-      el.style.willChange = 'transform';
-      el.style.display = 'flex';
-      return el;
-    };
-
-    const hideIncoming = () => {
-      if (!incoming) return;
-      clearStyles(incoming);
-      incoming.style.display = 'none';
-      incoming = null;
-      side = 0;
-    };
-
-    const place = () => {
-      const dir = dx < 0 ? 1 : -1;
-      if (dir !== side) {
-        hideIncoming();
-        incoming = showIncoming(dir);
-        side = incoming ? dir : 0;
-      }
-      if (!incoming) {
-        panel.style.transform = `translateX(${dx * 0.25}px)`;
-        return;
-      }
-      panel.style.transform = `translateX(${dx}px)`;
-      incoming.style.transform = `translateX(${dir * span() + dx}px)`;
-    };
-
-    // Both pages slide on together; the new one takes the old one's place
-    // in the page once it is there.
-    const slideTo = (next, dir) => {
-      const from = panel;
-      const to = incoming;
-      const w = span();
-      const ms = slideMs(w - Math.abs(dx));
-      from.style.transition = ease(ms);
-      from.style.transform = `translateX(${-dir * w}px)`;
-      to.style.transition = ease(ms);
-      to.style.transform = 'translateX(0)';
-      after(ms, () => {
-        clearStyles(from);
-        clearStyles(to);
-        incoming = null;
-        side = 0;
-        // The preview already showed the page up to date, unless it was not
-        // (yet), or something changed mid-drag.
-        this.switchView(next, !this.isViewStale(next));
-        endDrag();
-      });
-    };
-
-    const settle = () => {
-      const from = panel;
-      const to = incoming;
-      const ms = slideMs(Math.abs(dx));
-      from.style.transition = ease(ms);
-      from.style.transform = 'translateX(0)';
-      if (to) {
-        to.style.transition = ease(ms);
-        to.style.transform = `translateX(${side * span()}px)`;
-      }
-      after(ms, () => {
-        clearStyles(from);
-        hideIncoming();
-        endDrag();
-      });
-    };
-
-    const abandon = () => {
-      pointerId = null;
-      if (dragging && panel) settle();
-      dragging = false;
-    };
-
-    container.addEventListener('pointerdown', (e) => {
-      swiped = false;
-      // The main mouse button only; a right click is a menu.
-      if (e.pointerType === 'mouse' && e.button !== 0) return;
-      // A second finger is a pinch or a fumble, not a swipe.
-      if (!e.isPrimary) {
-        abandon();
-        return;
-      }
-      pointerId = null;
-      // A swipe while the last one is still sliding lands it at once, and
-      // looks again at what is under the finger now that it has.
-      let target = e.target;
-      if (pending) {
-        flush();
-        target = document.elementFromPoint(e.clientX, e.clientY);
-        if (!target) return;
-      }
-      // Below a short page the finger lands on the column itself, which
-      // belongs to the page on show.
-      const p = target.closest('.view-panel')
-        || (target === container ? document.getElementById(`panel-${this.activeView}`) : null);
-      if (!p || target.closest(OWN_GESTURE)) return;
-      if (document.querySelector('.modal-overlay.active')) return;
-      // With the keyboard up, a stray sideways brush should not leave the page.
-      const focused = document.activeElement;
-      if (focused && focused.matches && focused.matches('input, textarea, select, [contenteditable="true"]')) return;
-      if (e.pointerType !== 'mouse' && (e.clientX < EDGE || e.clientX > window.innerWidth - EDGE)) return;
-      if (scrollsSideways(target)) return;
-      panel = p;
-      pointerId = e.pointerId;
-      startX = e.clientX;
-      startY = e.clientY;
-      dx = 0;
-      decided = false;
-      dragging = false;
-      samples = [{ x: e.clientX, t: e.timeStamp }];
-    });
-
-    container.addEventListener('pointermove', (e) => {
-      if (e.pointerId !== pointerId) return;
-      const mx = e.clientX - startX;
-      const my = e.clientY - startY;
-      if (!decided) {
-        if (Math.abs(mx) < 10 && Math.abs(my) < 10) return;
-        decided = true;
-        // Anything short of clearly sideways belongs to the page scroll (or,
-        // with a mouse, to selecting text).
-        if (Math.abs(mx) < Math.abs(my) * 1.3) {
-          pointerId = null;
-          return;
-        }
-        dragging = true;
-        swiped = true;
-        beginDrag(e);
-      }
-      dx = mx;
-      samples.push({ x: e.clientX, t: e.timeStamp });
-      while (samples.length > 2 && e.timeStamp - samples[0].t > 100) samples.shift();
-      place();
-    });
-
-    const finish = (e) => {
-      if (e.pointerId !== pointerId) return;
-      pointerId = null;
-      if (!dragging) return;
-      dragging = false;
-      const dir = dx < 0 ? 1 : -1;
-      const next = neighbour(dir);
-      // Speed over the last tenth of a second, so a quick flick counts even
-      // when the whole drag was short.
-      const first = samples[0];
-      const dt = e.timeStamp - first.t;
-      const speed = dt > 0 ? (e.clientX - first.x) / dt : 0;
-      const flicked = Math.abs(speed) > 0.45 && Math.sign(speed) === -dir && Math.abs(dx) > 30;
-      const far = Math.abs(dx) > panel.offsetWidth * 0.25;
-      if (e.type === 'pointerup' && next && incoming && side === dir && (far || flicked)) {
-        slideTo(next, dir);
-      } else {
-        settle();
-      }
-    };
-    container.addEventListener('pointerup', finish);
-    container.addEventListener('pointercancel', finish);
-    // The mouse let go somewhere the page never heard about. Only the
-    // container's own capture counts: a finger starts out captured by
-    // whatever it touched, and that hands over to the container (bubbling
-    // up here) as the drag begins.
-    container.addEventListener('lostpointercapture', (e) => {
-      if (e.target !== container || e.pointerId !== pointerId || !dragging) return;
-      finish({ type: 'pointercancel', pointerId: e.pointerId, clientX: startX + dx, timeStamp: e.timeStamp });
-    });
-    // A mouse drag on an image or a link would otherwise start dragging it.
-    container.addEventListener('dragstart', (e) => {
-      if (pointerId !== null) e.preventDefault();
-    });
-
-    container.addEventListener('click', (e) => {
-      if (!swiped) return;
-      swiped = false;
-      e.stopPropagation();
-      e.preventDefault();
-    }, true);
   }
 
   renderAll() {
@@ -2622,74 +2573,13 @@ class MacroApp {
     this.renderTodaysLogs();
     this.renderDayLogs();
     if (this.historySearchOpen) this.renderHistoryList();
-    // Foods and Weight only redraw while on show; otherwise Foods is marked
-    // for the next time it is, or is dragged into view, and Weight - whose
-    // chart is too costly to draw mid-drag - is drawn ahead out of sight.
     if (this.activeView === 'foods') this.renderFoodsList();
-    else this.staleViews.add('foods');
     if (this.activeView === 'weights') this.renderWeightChart();
-    else if (this.isViewStale('weights')) this.scheduleWeightsWarmUp();
-  }
-
-  // Whether a page drawn only while on show is out of date. Weight compares
-  // what it was last drawn from, since cloud syncs repaint far more often
-  // than weights change.
-  isViewStale(name) {
-    if (name === 'weights') return this.weightsDrawnFrom !== this.weightsSignature();
-    return this.staleViews.has(name);
-  }
-
-  // What the Weight page is drawn from. Not the chart mode: drawing can
-  // change that itself, and it is only ever changed on the page, which
-  // redraws straight away.
-  weightsSignature() {
-    return `${this.weightVisibleCount}|`
-      + store.weights.map(w => `${w.id}:${w.date}:${w.weight}:${w.bf}`).join(',');
-  }
-
-  // The Weight chart is the one costly thing to draw, and a page swipe shows
-  // the page before landing on it. So it is drawn ahead, in a quiet moment,
-  // whenever its data has changed - laid out out of sight at the width it
-  // will be shown at, which lets the chart show later without redrawing.
-  scheduleWeightsWarmUp() {
-    if (this.weightsWarmUpPending) return;
-    this.weightsWarmUpPending = true;
-    const run = () => {
-      this.weightsWarmUpPending = false;
-      this.warmUpWeights();
-    };
-    if (typeof requestIdleCallback === 'function') {
-      requestIdleCallback(run, { timeout: 3000 });
-    } else {
-      setTimeout(run, 300);
-    }
-  }
-
-  warmUpWeights() {
-    const panel = document.getElementById('panel-weights');
-    const shown = document.getElementById(`panel-${this.activeView}`);
-    if (!panel || !shown || panel === shown || !this.isViewStale('weights')) return;
-    // Being dragged in right now: it is drawn when it lands instead.
-    if (panel.style.display !== 'none' || panel.style.position) return;
-    const props = ['position', 'visibility', 'left', 'top', 'width'];
-    panel.style.position = 'absolute';
-    panel.style.visibility = 'hidden';
-    panel.style.left = '-10000px';
-    panel.style.top = '0';
-    panel.style.width = `${shown.offsetWidth}px`;
-    panel.style.display = 'flex';
-    try {
-      this.renderWeightChart(true);
-    } catch (err) {
-      console.warn('Weight page warm-up:', err);
-    }
-    panel.style.display = 'none';
-    props.forEach(k => { panel.style[k] = ''; });
   }
 
   // The summary card follows the day picked on the week strip. For today it
   // counts both the meals still in Today's Log and anything already archived
-  // with Log Day under today's date, so the card agrees with the strip.
+  // with Finish day under today's date, so the card agrees with the strip.
   renderDailySubtotal() {
     const date = this.getSelectedDate();
     const totals = this.getDayTotals(date);
@@ -2742,6 +2632,17 @@ class MacroApp {
       const shown = isKcal ? Math.round(n).toLocaleString() : `${n}g`;
       el.textContent = over ? `${shown} over` : `${shown} left`;
       el.classList.toggle('over', over);
+      // The bar under each figure: how far through the target the day is,
+      // full and red once past it.
+      const bar = document.getElementById(id.replace('day-remaining-', 'day-progress-'));
+      if (bar) {
+        const pct = target > 0 ? Math.min(100, (consumed / target) * 100) : 0;
+        bar.classList.toggle('over', over);
+        bar.setAttribute('aria-valuemax', String(Math.round(target)));
+        bar.setAttribute('aria-valuenow', String(Math.round(consumed)));
+        const fill = bar.firstElementChild;
+        if (fill) fill.style.width = `${pct.toFixed(1)}%`;
+      }
     };
     setRemaining('day-remaining-kcal', totals.kcal, targets.kcal, true);
     setRemaining('day-remaining-prot', totals.protein, targets.protein, false);
@@ -2775,7 +2676,7 @@ class MacroApp {
       title = 'Change or undo this carry';
     } else if (st.isPast && st.canCarry) {
       const n = Math.abs(st.balance).toLocaleString();
-      text = `Carry ${n}`;
+      text = `Carry ${n} kcal`;
       title = st.balance > 0
         ? `Move this day's ${n} kcal under onto the days left this week`
         : `Take this day's ${n} kcal over back from the days left this week`;
@@ -2937,16 +2838,6 @@ class MacroApp {
     }
     const input = document.getElementById('carry-amount-input');
     if (input && rerenderInput) input.value = p.amount || '';
-    const quick = document.getElementById('carry-quick');
-    if (quick) {
-      const options = s.mode === 'carry'
-        ? [...new Set([Math.round(Math.abs(st.balance) / 2), Math.abs(st.balance)])].filter(v => v > 0)
-        : [250, 500, 750];
-      quick.innerHTML = options.map(v => `
-        <button type="button" class="carry-quick-btn${v === p.amount ? ' active' : ''}"
-                onclick="app.setCarrySheet({ amount: ${v} })">${s.mode === 'carry' && v === Math.abs(st.balance) ? 'All ' : ''}${v.toLocaleString()}</button>
-      `).join('');
-    }
 
     // Where the calories go, or where they come from.
     const dest = document.getElementById('carry-dest');
@@ -3186,10 +3077,13 @@ class MacroApp {
       t.carbs += Number(carbs) || 0;
       t.fat += Number(fat) || 0;
     };
-    if (key === new Date().toDateString()) {
-      const w = store.getTodayTotals();
-      add(w.kcal, w.protein, w.carbs, w.fat);
-    }
+    // Meals still in Today's Log count on the day they were logged, so one
+    // left there overnight shows on its own day and never inflates the next.
+    const todayKey = new Date().toDateString();
+    store.todayMeals.forEach(m => {
+      if (!m.totals || (mealLoggedDay(m) || todayKey) !== key) return;
+      add(m.totals.kcal, m.totals.protein, m.totals.carbs, m.totals.fat);
+    });
     (byDay.get(key) || []).forEach(l => add(l['Total Kcal'], l['Total Protein'], l['Total Carbs'], l['Total Fat']));
     return {
       kcal: Math.round(t.kcal),
@@ -3974,7 +3868,7 @@ class MacroApp {
         <div class="empty-log-box">
           <div class="empty-title">${future ? 'This day is still ahead' : 'Nothing logged this day'}</div>
           <div class="empty-desc">${future
-            ? 'Meals you log with Log Day show up on the day you pick for them.'
+            ? 'You can plan it as a high or low day above. Meals show up here once that day comes.'
             : 'Pick another day on the strip above, or search your history for a food.'}</div>
         </div>
       `;
@@ -3982,14 +3876,14 @@ class MacroApp {
     }
 
     section.innerHTML = logs.map(log => {
-      const time = String(log['Log Session'] || '').split(' - ').slice(1).join(' - ').trim();
-      const title = isToday ? 'Already logged today' : 'Logged meals';
+      // The time a day was filed says nothing about the day itself, so it is
+      // not shown.
+      const title = isToday ? 'Already filed today' : 'Meals';
       return `
         <div class="todays-log-card day-log-card">
           <div class="todays-log-header">
             <div class="todays-log-title">
               <span>${title}</span>
-              ${time ? `<span class="day-log-time">${this.escapeHTML(time)}</span>` : ''}
             </div>
             <span class="history-total-kcal">${(Number(log['Total Kcal']) || 0).toLocaleString()} kcal</span>
           </div>
@@ -4066,12 +3960,17 @@ class MacroApp {
   addNewBuilderRow(food = null) {
     const rowId = 'row-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
     if (food) {
-      const baseQty = food.Quantity || food.quantity || 100;
+      const unit = unitOfEntry(food);
+      const baseQty = food.Quantity || food.quantity || unitInfo(unit).base;
       const baseKcal = food.Kcal !== undefined ? food.Kcal : (food.kcal || 0);
       const baseProt = food.Protein !== undefined ? food.Protein : (food.protein || 0);
       const baseCarb = food.Carb !== undefined ? food.Carb : (food.carbs || 0);
       const baseFat = food.Fat !== undefined ? food.Fat : (food.fat || 0);
-      const defaultQty = food.userQty !== undefined ? food.userQty : (food.qty || 0);
+      // A food counted in slices or scoops starts at its own serving; one
+      // weighed or measured starts empty, waiting for the amount.
+      const defaultQty = food.userQty !== undefined ? food.userQty
+        : food.qty !== undefined ? (food.qty || 0)
+        : (unitInfo(unit).count ? baseQty : 0);
       const ratio = defaultQty > 0 ? (defaultQty / baseQty) : 0;
       // A food logged with macros typed in but no quantity has nothing to
       // scale by, so its macros come back exactly as logged and held.
@@ -4079,6 +3978,7 @@ class MacroApp {
         this.builderRows.push({
           id: rowId,
           name: food.Item || food.name || '',
+          unit,
           baseQty,
           baseKcal,
           baseProt,
@@ -4096,6 +3996,7 @@ class MacroApp {
       this.builderRows.push({
         id: rowId,
         name: food.Item || food.name || '',
+        unit,
         baseQty,
         baseKcal,
         baseProt,
@@ -4114,6 +4015,7 @@ class MacroApp {
       this.builderRows.push({
         id: rowId,
         name: '',
+        unit: 'g',
         baseQty: 100,
         baseKcal: 0,
         baseProt: 0,
@@ -4137,12 +4039,16 @@ class MacroApp {
     }
     let html = '';
     this.builderRows.forEach((row) => {
+      // A row with nothing in it yet shows empty boxes rather than a line of
+      // zeros that read like logged values.
+      const blankRow = !(row.name || '').trim() && !row.kcal && !row.prot && !row.carb && !row.fat;
       html += `
         <div class="food-builder-row" id="${row.id}">
           <div class="food-search-top-line">
             <input type="text"
                    class="food-search-input-field"
-                   placeholder=""
+                   placeholder="Search your foods or type a name"
+                   aria-label="Food"
                    autocomplete="off"
                    autocorrect="off"
                    spellcheck="false"
@@ -4165,37 +4071,44 @@ class MacroApp {
                      id="input-qty-${row.id}"
                      class="stat-box-input"
                      placeholder="0"
+                     step="any"
+                     inputmode="decimal"
+                     aria-label="Amount, ${this.escapeHTML(unitInfo(unitOfEntry(row)).name.toLowerCase())}"
                      enterkeyhint="next"
                      value="${row.qty > 0 ? row.qty : ''}"
                      oninput="app.updateRowQty('${row.id}', this.value)"
                      onkeydown="app.handleQtyKeydown('${row.id}', event)">
-              <span class="stat-box-lbl">QTY(G)</span>
+              <span class="stat-box-lbl">${qtyLabelFor(unitOfEntry(row))}</span>
             </div>
             <div class="stat-box-cell">
               <input type="number" step="1" id="val-kcal-${row.id}"
                      class="stat-box-input stat-box-val kcal${row.overrides.kcal ? ' overridden' : ''}"
-                     value="${row.kcal}"
+                     aria-label="Calories" placeholder="–"
+                     value="${blankRow ? '' : row.kcal}"
                      oninput="app.updateRowMacro('${row.id}', 'kcal', this.value)">
               <span class="stat-box-lbl kcal">KCAL</span>
             </div>
             <div class="stat-box-cell">
               <input type="number" step="0.1" id="val-prot-${row.id}"
                      class="stat-box-input stat-box-val prot${row.overrides.prot ? ' overridden' : ''}"
-                     value="${row.prot}"
+                     aria-label="Protein, grams" placeholder="–"
+                     value="${blankRow ? '' : row.prot}"
                      oninput="app.updateRowMacro('${row.id}', 'prot', this.value)">
               <span class="stat-box-lbl prot">PROT</span>
             </div>
             <div class="stat-box-cell">
               <input type="number" step="0.1" id="val-carb-${row.id}"
                      class="stat-box-input stat-box-val carb${row.overrides.carb ? ' overridden' : ''}"
-                     value="${row.carb}"
+                     aria-label="Carbs, grams" placeholder="–"
+                     value="${blankRow ? '' : row.carb}"
                      oninput="app.updateRowMacro('${row.id}', 'carb', this.value)">
               <span class="stat-box-lbl carb">CARB</span>
             </div>
             <div class="stat-box-cell">
               <input type="number" step="0.1" id="val-fat-${row.id}"
                      class="stat-box-input stat-box-val fat${row.overrides.fat ? ' overridden' : ''}"
-                     value="${row.fat}"
+                     aria-label="Fat, grams" placeholder="–"
+                     value="${blankRow ? '' : row.fat}"
                      oninput="app.updateRowMacro('${row.id}', 'fat', this.value)">
               <span class="stat-box-lbl fat">FAT</span>
             </div>
@@ -4212,6 +4125,7 @@ class MacroApp {
   // adding, removing, picking a food, loading a favourite and copying a meal.
   // Typing in a quantity or macro box does not repaint, so those call it too.
   touchBuilder() {
+    this.refreshLogMealButton();
     // Mid-edit the rows on screen are a logged meal, not the builder draft -
     // what syncs is the stash, which is not changing.
     if (this.suppressBuilderSync || this.mealEdit) return;
@@ -4359,15 +4273,17 @@ class MacroApp {
     const renderItem = (f, optIdx) => {
       const name = f.Item || f.name || 'Food item';
       const source = f.source || 'db';
-      const sourceLabel = source === 'openfood' ? 'OpenFood' : (source === 'usda' ? 'USDA' : 'My DB');
+      const sourceLabel = source === 'openfood' ? 'OpenFood' : (source === 'usda' ? 'USDA' : 'My food');
       const kcal = f.Kcal !== undefined ? f.Kcal : (f.kcal || 0);
       const prot = f.Protein !== undefined ? f.Protein : (f.protein || 0);
       const carb = f.Carb !== undefined ? f.Carb : (f.carb || f.carbs || 0);
       const fat = f.Fat !== undefined ? f.Fat : (f.fat || 0);
       const safeFoodJSON = JSON.stringify(f).replace(/"/g, '&quot;');
       // Foods in the personal database can be quoted against any serving
-      // size, so the macros above are per basisQty grams - not always 100g.
-      const basisQty = Number(f.Quantity || f.quantity || 100) || 100;
+      // size and type, so the macros above are per basisQty of its unit - not
+      // always 100g.
+      const unit = unitOfEntry(f);
+      const basisQty = Number(f.Quantity || f.quantity) || unitInfo(unit).base;
       // Brand matters once results run deep - it is what separates Tesco Finest
       // from Tesco Everyday Value in a list of hundreds.
       const brandHTML = f.brand
@@ -4396,7 +4312,7 @@ class MacroApp {
               ${carb > 0 ? `<span class="macro-pill carb">C: ${carb}g</span>` : ''}
               ${fat > 0 ? `<span class="macro-pill fat">F: ${fat}g</span>` : ''}
               ${(kcal + prot + carb + fat) === 0 ? '<span class="macro-pill">no macro data</span>' : ''}
-              <span class="macro-per-qty${basisQty === 100 ? '' : ' custom-basis'}">(${basisQty}g)</span>
+              <span class="macro-per-qty${unit === 'g' && basisQty === 100 ? '' : ' custom-basis'}">(${formatAmount(basisQty, unit)})</span>
             </div>
           </div>
           ${saveHTML}
@@ -4419,11 +4335,11 @@ class MacroApp {
       <div class="dropdown-actions-footer">
         <div class="dropdown-action-btn log-only${activeCls(logOnlyIdx)}" data-opt="${logOnlyIdx}" onclick="app.addCustomToRowOnly('${rowId}', '${safeQ}')">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
-          <span>Add "<strong>${escQ}</strong>" to Log Only</span>
+          <span>Use "<strong>${escQ}</strong>" just this once</span>
         </div>
         <div class="dropdown-action-btn save-db${activeCls(saveDbIdx)}" data-opt="${saveDbIdx}" onclick="app.openSaveFoodFromRow('${rowId}', '${safeQ}')">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
-          <span>Save "<strong>${escQ}</strong>" &amp; Add to Food List</span>
+          <span>Save "<strong>${escQ}</strong>" as a new food</span>
         </div>
       </div>
     `;
@@ -4565,10 +4481,17 @@ class MacroApp {
     const prot = Math.round((nut['proteins_100g'] || 0) * 10) / 10;
     const carb = Math.round((nut['carbohydrates_100g'] || 0) * 10) / 10;
     const fat = Math.round((nut['fat_100g'] || 0) * 10) / 10;
+    // Drinks are quoted per 100 ml. Open Food Facts uses the same _100g keys
+    // either way, but the pack size ("330 ml", "1 L") says which it is; the
+    // serving size only counts when there is no pack size, since a jar of
+    // honey can list its serving as "1 tbsp (15 ml)".
+    const packText = String(p.quantity || p.serving_size || '');
+    const liquid = /\d\s*(ml|cl|dl|l|litres?|liters?)\b/i.test(packText);
     return {
       id: 'off-' + (p.code || Math.random().toString(36).substr(2, 6)),
       Item: pName.substring(0, 50),
       Quantity: 100,
+      Unit: liquid ? 'ml' : 'g',
       Kcal: kcal,
       Protein: prot,
       Carb: carb,
@@ -4834,10 +4757,10 @@ class MacroApp {
     const cleaned = marked.replace(/^(a|an|some|the)\s+/i, '').trim();
     if (!cleaned) return [];
 
-    const UNITS = /^(grams?|kgs?|kilograms?|mls?|millilitres?|oz|ounces?|g)$/i;
+    const UNITS = /^(grams?|kgs?|kilograms?|mls?|millilitres?|milliliters?|l|litres?|liters?|oz|ounces?|g)$/i;
     const toGrams = (amount, unit) => {
       const u = (unit || 'g').toLowerCase();
-      if (/^(kgs?|kilograms?)$/.test(u)) return amount * 1000;
+      if (/^(kgs?|kilograms?|l|litres?|liters?)$/.test(u)) return amount * 1000;
       if (/^(oz|ounces?)$/.test(u)) return amount * 28;
       return amount; // grams and millilitres map 1:1
     };
@@ -4859,19 +4782,21 @@ class MacroApp {
           unit = tokens[i + 1];
           i++; // consume the unit token
         }
-        current = { grams: Math.round(toGrams(asNum, unit)), words: [] };
+        // `measured`: the amount came with a weight or volume, rather than
+        // being a bare count like "2 eggs".
+        current = { grams: Math.round(toGrams(asNum, unit)), measured: !!unit, words: [] };
         continue;
       }
 
       // A number written joined to its unit, e.g. "150g".
-      const joined = tok.match(/^(\d+(?:\.\d+)?)(grams?|kgs?|mls?|oz|g)$/i);
+      const joined = tok.match(/^(\d+(?:\.\d+)?)(grams?|kgs?|mls?|l|oz|g)$/i);
       if (joined) {
         if (current && current.words.length) items.push(current);
-        current = { grams: Math.round(toGrams(parseFloat(joined[1]), joined[2])), words: [] };
+        current = { grams: Math.round(toGrams(parseFloat(joined[1]), joined[2])), measured: true, words: [] };
         continue;
       }
 
-      if (!current) current = { grams: null, words: [] };
+      if (!current) current = { grams: null, measured: false, words: [] };
       current.words.push(tok);
     }
     if (current && current.words.length) items.push(current);
@@ -4879,7 +4804,8 @@ class MacroApp {
     return items
       .map(it => ({
         name: it.words.join(' ').replace(/^(a|an|some|the)\s+/i, '').trim().slice(0, 60),
-        grams: it.grams
+        grams: it.grams,
+        measured: it.measured
       }))
       .filter(it => it.name);
   }
@@ -5053,16 +4979,36 @@ class MacroApp {
   async resolveParsedItems(items) {
     const resolved = [];
     for (const item of items) {
+      const food = this.findBestLocalFood(item.name);
+      // The parsing API only gives an amount when one was stated, always as
+      // grams - so anything it returns counts as measured.
+      const measured = item.measured !== undefined ? !!item.measured : item.grams != null;
       resolved.push({
         spoken: item.name,
         // The original transcript, kept so a later correction can be learned
         // against what was actually heard rather than the edited text.
         heard: item.name,
         grams: item.grams,
-        food: this.findBestLocalFood(item.name)
+        measured,
+        food,
+        qty: this.spokenAmountFor(food, item.grams, measured)
       });
     }
     return resolved;
+  }
+
+  // What was said, in the matched food's own unit. Grams and millilitres go
+  // straight across; kilograms and litres are a thousand of them; a count
+  // ("2 eggs") is that many of a food counted in units - but a weight said
+  // for one ("150 g of egg") cannot be turned into a count, so it is left
+  // for you to fill in.
+  spokenAmountFor(food, amount, measured) {
+    const n = Number(amount);
+    if (amount === null || amount === undefined || !isFinite(n) || n <= 0) return null;
+    const unit = unitInfo(unitOfEntry(food));
+    if (unit.id === 'kg' || unit.id === 'l') return Math.round((n / 1000) * 1000) / 1000;
+    if (unit.count) return measured ? null : n;
+    return n;
   }
 
   // Normalises a spoken food name for comparison: lowercase, punctuation out,
@@ -5299,6 +5245,7 @@ class MacroApp {
         const matched = !!it.food;
         const kcal = matched ? it.food.Kcal : 0;
         const shownName = matched ? (it.food.Item || it.food.name) : it.spoken;
+        const unit = unitOfEntry(it.food);
         return `
           <div class="parsed-item">
             <div class="parsed-item-main">
@@ -5307,7 +5254,7 @@ class MacroApp {
                      oninput="app.updateParsedItemName(${i}, this.value)">
               <div class="parsed-item-sub">
                 ${matched
-                  ? `heard "${this.escapeHTML(it.heard || it.spoken)}" &middot; ${kcal} kcal/100g${
+                  ? `heard "${this.escapeHTML(it.heard || it.spoken)}" &middot; ${kcal} kcal ${this.escapeHTML(formatBasis(it.food.Quantity || unitInfo(unit).base, unit))}${
                       it.food.viaAlias
                         ? ' <span class="parsed-learned">learned</span>'
                         : (it.food.matchScore && it.food.matchScore < 100
@@ -5315,8 +5262,10 @@ class MacroApp {
                   : `heard "${this.escapeHTML(it.heard || it.spoken)}" &middot; <span class="parsed-unmatched">not in your food list</span>`}
               </div>
             </div>
-            <input type="number" class="parsed-item-qty" placeholder="g"
-                   value="${it.grams !== null && it.grams !== undefined ? it.grams : ''}"
+            <input type="number" class="parsed-item-qty" step="any" inputmode="decimal"
+                   placeholder="${this.escapeHTML(unitInfo(unit).plural || unitInfo(unit).label)}"
+                   title="${this.escapeHTML(unitInfo(unit).name)}"
+                   value="${it.qty !== null && it.qty !== undefined ? it.qty : ''}"
                    oninput="app.updateParsedItemQty(${i}, this.value)">
             <button type="button" class="pill-icon-btn danger parsed-item-del" title="Remove"
                     onclick="app.removeParsedItem(${i})">
@@ -5345,14 +5294,24 @@ class MacroApp {
       this.setVoiceAlias(it.heard, match.Item || match.name);
     }
     it.spoken = name;
+    // The amount follows the new match's unit, unless it was typed by hand.
+    if (!it.qtyEdited) it.qty = this.spokenAmountFor(match, it.grams, it.measured);
 
-    // Only refresh the subtitle - re-rendering would steal focus mid-typing.
+    // Only refresh the subtitle and the amount - re-rendering would steal
+    // focus mid-typing.
     const sub = document.querySelectorAll('#voice-results .parsed-item')[index];
     const subEl = sub && sub.querySelector('.parsed-item-sub');
+    const unit = unitOfEntry(match);
     if (subEl) {
       subEl.innerHTML = match
-        ? `matched &middot; ${match.Kcal} kcal/100g`
+        ? `matched &middot; ${match.Kcal} kcal ${this.escapeHTML(formatBasis(match.Quantity || unitInfo(unit).base, unit))}`
         : `<span class="parsed-unmatched">not in your food list</span>`;
+    }
+    const qtyEl = sub && sub.querySelector('.parsed-item-qty');
+    if (qtyEl) {
+      qtyEl.placeholder = unitInfo(unit).plural || unitInfo(unit).label;
+      qtyEl.title = unitInfo(unit).name;
+      if (!it.qtyEdited) qtyEl.value = it.qty !== null && it.qty !== undefined ? it.qty : '';
     }
   }
 
@@ -5365,7 +5324,7 @@ class MacroApp {
   // Manual row, for building the rest of the meal without speaking.
   addManualVoiceItem() {
     this.freezeVoiceList();
-    this.voiceItems.push({ spoken: '', grams: null, food: null, source: 'manual' });
+    this.voiceItems.push({ spoken: '', grams: null, measured: false, qty: null, food: null, source: 'manual' });
     this.renderParsedItems();
     setTimeout(() => {
       const inputs = document.querySelectorAll('#voice-results .parsed-item-name-input');
@@ -5379,7 +5338,9 @@ class MacroApp {
     const items = this.voiceItems;
     if (!items[index]) return;
     const v = parseFloat(value);
-    items[index].grams = isNaN(v) ? null : v;
+    // In the matched food's own unit, as shown beside it.
+    items[index].qty = isNaN(v) ? null : v;
+    items[index].qtyEdited = true;
   }
 
   applyParsedItems() {
@@ -5397,7 +5358,8 @@ class MacroApp {
       const row = this.builderRows[this.builderRows.length - 1];
       if (it.food) {
         row.name = it.food.Item || it.food.name || it.spoken;
-        row.baseQty = it.food.Quantity || 100;
+        row.unit = unitOfEntry(it.food);
+        row.baseQty = it.food.Quantity || unitInfo(row.unit).base;
         row.baseKcal = it.food.Kcal || 0;
         row.baseProt = it.food.Protein || 0;
         row.baseCarb = it.food.Carb || 0;
@@ -5410,7 +5372,7 @@ class MacroApp {
       // this afterwards left the QTY box blank: updateRowQty writes the macro
       // fields but never the quantity input, so the template's already-rendered
       // empty value stuck.
-      const qty = Number(it.grams);
+      const qty = Number(it.qty);
       if (Number.isFinite(qty) && qty > 0) {
         row.qty = qty;
         const ratio = row.baseQty > 0 ? qty / row.baseQty : 0;
@@ -6020,7 +5982,7 @@ class MacroApp {
         <span class="macro-pill prot">P: ${food.Protein}g</span>
         <span class="macro-pill carb">C: ${food.Carb}g</span>
         <span class="macro-pill fat">F: ${food.Fat}g</span>
-        <span class="macro-per-qty">(per ${food.Quantity || 100}g)</span>
+        <span class="macro-per-qty">(${formatBasis(food.Quantity || unitInfo(unitOfEntry(food)).base, unitOfEntry(food))})</span>
       </div>
       ${serving}
       <div class="barcode-result-code">Barcode: ${this.escapeHTML(food.barcode || '')}</div>
@@ -6057,6 +6019,7 @@ class MacroApp {
     const row = this.builderRows.find(r => r.id === rowId);
     if (!row) return;
     row.name = customName;
+    row.unit = 'g';
     row.baseQty = 100;
     row.baseKcal = 0;
     row.baseProt = 0;
@@ -6099,6 +6062,7 @@ class MacroApp {
     const hasMacros = row && (row.baseKcal > 0 || row.baseProt > 0 || row.baseCarb > 0 || row.baseFat > 0);
     const prefill = hasMacros ? {
       Quantity: row.baseQty,
+      Unit: unitOfEntry(row),
       Kcal: row.baseKcal,
       Protein: row.baseProt,
       Carb: row.baseCarb,
@@ -6128,7 +6092,10 @@ class MacroApp {
     if (rowIdInput) rowIdInput.value = rowId || '';
     if (barcodeInput) barcodeInput.value = barcode || '';
     if (nameInput) nameInput.value = defaultName || '';
-    if (qtyInput) qtyInput.value = val('Quantity') || '100';
+    const unit = prefill ? unitOfEntry(prefill) : 'g';
+    this.setFoodUnitField(unit);
+    if (qtyInput) qtyInput.value = val('Quantity') || String(unitInfo(unit).base);
+    this.refreshServingHint();
     if (kcalInput) kcalInput.value = val('Kcal');
     if (protInput) protInput.value = val('Protein');
     if (carbInput) carbInput.value = val('Carb');
@@ -6141,10 +6108,49 @@ class MacroApp {
 
     // Opened from the Foods page there is no builder row to "use" it in.
     const submitBtn = document.getElementById('save-food-submit-btn');
-    if (submitBtn && !rowId) submitBtn.textContent = 'Save to Food List';
+    if (submitBtn && !rowId) submitBtn.textContent = 'Save food';
 
     if (rowId) this.closeRowDropdown(rowId);
     this.openModal('save-food-db-modal');
+  }
+
+  // The food dialog's serving type. The options are built from FOOD_UNITS the
+  // first time, so the list lives in one place.
+  setFoodUnitField(unit) {
+    const select = document.getElementById('save-food-unit-select');
+    if (!select) return;
+    if (!select.options.length) {
+      select.innerHTML = FOOD_UNITS
+        .map(u => `<option value="${u.id}">${this.escapeHTML(u.name)}</option>`)
+        .join('');
+    }
+    select.value = unitInfo(unit).id;
+    select.dataset.prev = select.value;
+  }
+
+  // Switching to a unit with a different usual serving moves the serving
+  // size along - 100 g becomes 1 slice - unless it was changed by hand.
+  handleFoodUnitChange(unit) {
+    const select = document.getElementById('save-food-unit-select');
+    const qtyInput = document.getElementById('save-food-base-qty-input');
+    const prev = unitInfo(select ? select.dataset.prev : 'g');
+    const next = unitInfo(unit);
+    if (qtyInput) {
+      const current = parseFloat(qtyInput.value);
+      if (!qtyInput.value || current === prev.base) qtyInput.value = String(next.base);
+    }
+    if (select) select.dataset.prev = next.id;
+    this.refreshServingHint();
+  }
+
+  refreshServingHint() {
+    const hint = document.getElementById('save-food-serving-hint');
+    const select = document.getElementById('save-food-unit-select');
+    const qtyInput = document.getElementById('save-food-base-qty-input');
+    if (!hint) return;
+    const unit = select ? select.value : 'g';
+    const qty = parseFloat(qtyInput ? qtyInput.value : '') || unitInfo(unit).base;
+    hint.textContent = `The kcal and macros below are ${formatBasis(qty, unit)}.`;
   }
 
   // One dialog, two jobs. Passing a food id switches it to editing that food.
@@ -6153,8 +6159,8 @@ class MacroApp {
     const title = document.getElementById('save-food-modal-title');
     const submitBtn = document.getElementById('save-food-submit-btn');
     if (editIdInput) editIdInput.value = editId || '';
-    if (title) title.textContent = editId ? 'Edit Food' : 'Save to Food List';
-    if (submitBtn) submitBtn.textContent = editId ? 'Save Changes' : 'Save to Food List & Use';
+    if (title) title.textContent = editId ? 'Edit food' : 'New food';
+    if (submitBtn) submitBtn.textContent = editId ? 'Save changes' : 'Save & add to meal';
   }
 
   openEditFoodModal(foodId) {
@@ -6167,7 +6173,9 @@ class MacroApp {
     set('save-food-row-id', '');
     set('save-food-barcode', food.barcode || '');
     set('save-food-name-input', food.Item || '');
-    set('save-food-base-qty-input', food.Quantity || 100);
+    this.setFoodUnitField(unitOfEntry(food));
+    set('save-food-base-qty-input', food.Quantity || unitInfo(unitOfEntry(food)).base);
+    this.refreshServingHint();
     set('save-food-kcal-input', food.Kcal || 0);
     set('save-food-prot-input', food.Protein || 0);
     set('save-food-carb-input', food.Carb || 0);
@@ -6188,7 +6196,9 @@ class MacroApp {
     const barcodeEl = document.getElementById('save-food-barcode');
     const barcode = barcodeEl ? barcodeEl.value.trim() : '';
     const name = document.getElementById('save-food-name-input').value.trim();
-    const baseQty = parseFloat(document.getElementById('save-food-base-qty-input').value) || 100;
+    const unitSelect = document.getElementById('save-food-unit-select');
+    const unit = unitOfEntry({ Unit: unitSelect ? unitSelect.value : 'g' });
+    const baseQty = parseFloat(document.getElementById('save-food-base-qty-input').value) || unitInfo(unit).base;
     const kcal = parseFloat(document.getElementById('save-food-kcal-input').value) || 0;
     const prot = parseFloat(document.getElementById('save-food-prot-input').value) || 0;
     const carb = parseFloat(document.getElementById('save-food-carb-input').value) || 0;
@@ -6202,6 +6212,7 @@ class MacroApp {
     const newFoodObj = {
       Item: name,
       Quantity: baseQty,
+      Unit: unit,
       Kcal: kcal,
       Protein: prot,
       Carb: carb,
@@ -6214,6 +6225,7 @@ class MacroApp {
       const res = await store.updateFoodInDatabase(editId, {
         Item: name,
         Quantity: baseQty,
+        Unit: unit,
         Kcal: kcal,
         Protein: prot,
         Carb: carb,
@@ -6266,17 +6278,22 @@ class MacroApp {
     // A new food invalidates any hand-typed macros from the previous one.
     row.overrides = {};
     row.name = food.Item || food.name;
-    row.baseQty = food.Quantity || food.quantity || 100;
+    row.unit = unitOfEntry(food);
+    row.baseQty = food.Quantity || food.quantity || unitInfo(row.unit).base;
     row.baseKcal = food.Kcal !== undefined ? food.Kcal : (food.kcal || 0);
     row.baseProt = food.Protein !== undefined ? food.Protein : (food.protein || 0);
     row.baseCarb = food.Carb !== undefined ? food.Carb : (food.carb || food.carbs || 0);
     row.baseFat = food.Fat !== undefined ? food.Fat : (food.fat || 0);
     
-    row.qty = 0;
-    row.kcal = 0;
-    row.prot = 0;
-    row.carb = 0;
-    row.fat = 0;
+    // Counted in slices or scoops, it starts at one serving - selected, so
+    // typing replaces it. Weighed or measured, the box waits for the amount.
+    const startQty = unitInfo(row.unit).count ? row.baseQty : 0;
+    const ratio = startQty > 0 && row.baseQty > 0 ? startQty / row.baseQty : 0;
+    row.qty = startQty;
+    row.kcal = Math.round(row.baseKcal * ratio);
+    row.prot = Math.round(row.baseProt * ratio * 10) / 10;
+    row.carb = Math.round(row.baseCarb * ratio * 10) / 10;
+    row.fat = Math.round(row.baseFat * ratio * 10) / 10;
 
     this.closeRowDropdown(rowId);
     this.renderBuilderRows();
@@ -6376,10 +6393,24 @@ class MacroApp {
     const subCarb = document.getElementById('meal-subtotal-val-carb');
     const subFat = document.getElementById('meal-subtotal-val-fat');
 
-    if (subKcal) subKcal.textContent = `${mealKcal} kcal`;
+    if (subKcal) subKcal.textContent = `${mealKcal.toLocaleString()} kcal`;
     if (subProt) subProt.textContent = `P: ${mealProt.toFixed(1)}g`;
     if (subCarb) subCarb.textContent = `C: ${mealCarb.toFixed(1)}g`;
     if (subFat) subFat.textContent = `F: ${mealFat.toFixed(1)}g`;
+
+    // Nothing to add up, nothing to show; and Log meal only once there is a
+    // food to log, so it never looks ready when it is not.
+    const bar = document.querySelector('.meal-subtotal-bar');
+    if (bar) bar.hidden = !(mealKcal || mealProt || mealCarb || mealFat);
+    this.refreshLogMealButton();
+  }
+
+  refreshLogMealButton() {
+    const btn = document.getElementById('log-meal-submit-btn');
+    if (!btn) return;
+    const ready = this.builderRows.some(r => this.isLoggableRow(r));
+    btn.disabled = !ready;
+    btn.title = ready ? (this.mealEdit ? 'Save the changes to this meal' : "Add this meal to Today's Log") : 'Add a food and its amount first';
   }
 
   // A row counts once it has a name and either a quantity or some macros -
@@ -6401,6 +6432,9 @@ class MacroApp {
         id: Date.now() + Math.random(),
         name: r.name.trim(),
         qty: r.qty,
+        // Only written when it is not grams, so older items and new ones in
+        // grams look the same.
+        ...(unitOfEntry(r) !== 'g' ? { unit: unitOfEntry(r) } : {}),
         kcal: r.kcal,
         protein: r.prot,
         carbs: r.carb,
@@ -6458,43 +6492,79 @@ class MacroApp {
     this.showToast(`Logged "${mealName}" (${mealTotals.kcal} kcal)!`, 'success');
   }
 
+  // Today's Log holds every meal not yet filed into the history. Today's
+  // own come last, under the total in the header; any left over from an
+  // earlier day sit above them with a note and one tap to file them away -
+  // they already count on their own day, never on today's.
   renderTodaysLogs() {
     const container = document.getElementById('todays-logged-meals-list');
+    const todayKey = new Date().toDateString();
+    const dayOf = m => mealLoggedDay(m) || todayKey;
+    const todays = store.todayMeals.filter(m => dayOf(m) === todayKey);
+    const earlier = store.todayMeals.filter(m => dayOf(m) !== todayKey);
 
-    
-    const todayTotals = store.getTodayTotals();
-
-    const tSubKcal = document.getElementById('todays-subtotal-val-kcal');
-    const tSubProt = document.getElementById('todays-subtotal-val-prot');
-    const tSubCarb = document.getElementById('todays-subtotal-val-carb');
-    const tSubFat = document.getElementById('todays-subtotal-val-fat');
-    if (tSubKcal) tSubKcal.textContent = `${todayTotals.kcal} kcal`;
-    if (tSubProt) tSubProt.textContent = `P: ${todayTotals.protein}g`;
-    if (tSubCarb) tSubCarb.textContent = `C: ${todayTotals.carbs}g`;
-    if (tSubFat) tSubFat.textContent = `F: ${todayTotals.fat}g`;
+    const totalEl = document.getElementById('todays-log-total');
+    if (totalEl) {
+      totalEl.textContent = `${store.totalsOfMeals(todays).kcal.toLocaleString()} kcal`;
+      totalEl.hidden = todays.length === 0;
+    }
+    const finishBtn = document.getElementById('finish-day-btn');
+    if (finishBtn) finishBtn.hidden = todays.length === 0;
 
     if (!container) return;
 
     if (store.todayMeals.length === 0) {
       container.innerHTML = `
         <div class="empty-log-box">
-          <div class="empty-title">No meals logged for today yet.</div>
-          <div class="empty-desc">Use the Meal Builder above to log your foods.</div>
+          <div class="empty-title">Nothing logged yet today</div>
+          <div class="empty-desc">Add foods in the Meal Builder above, then tap Log meal.</div>
         </div>
       `;
       return;
     }
 
-    // Same shape as the Past History cards: a meal heading plus one small
-    // editable pill per food, each with its own edit and remove actions.
-    container.innerHTML = store.todayMeals.map(m => `
+    const groups = new Map();
+    earlier.forEach(m => {
+      const k = dayOf(m);
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(m);
+    });
+    const earlierHTML = [...groups.entries()]
+      .sort((a, b) => new Date(a[0]) - new Date(b[0]))
+      .map(([k, meals]) => {
+        const label = new Date(k).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+        const short = new Date(k).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+        const n = meals.length;
+        return `
+          <div class="unfiled-notice" role="status">
+            <div class="unfiled-notice-text">
+              <strong>${n} ${n === 1 ? 'meal' : 'meals'} from ${this.escapeHTML(label)}</strong>
+              ${n === 1 ? 'is' : 'are'} still here. ${n === 1 ? 'It counts' : 'They count'} towards that day, not today.
+            </div>
+            <button type="button" class="unfiled-file-btn" onclick="app.fileEarlierMeals('${this.escapeHTML(k)}')">File under ${this.escapeHTML(short)}</button>
+          </div>
+          ${meals.map(m => this.todayMealHTML(m)).join('')}
+        `;
+      }).join('');
+
+    let todayHTML = '';
+    if (todays.length) {
+      todayHTML = (earlier.length ? '<div class="todays-log-subhead">Today</div>' : '')
+        + todays.map(m => this.todayMealHTML(m)).join('');
+    } else {
+      todayHTML = '<div class="todays-log-subhead">Today</div><div class="todays-log-none">Nothing logged yet today.</div>';
+    }
+    container.innerHTML = earlierHTML + todayHTML;
+  }
+
+  // One meal in Today's Log: its heading (name, time, total) and, opened,
+  // its foods - each with its own edit and remove.
+  todayMealHTML(m) {
+    return `
       <div class="history-meal-group today-meal-group${this.openTodayMeals.has(m.id) ? ' open' : ''}${this.isMealBeingEdited('today', m.id) ? ' being-edited' : ''}" id="today-meal-${m.id}">
         <div class="history-meal-group-title today-meal-title">
-          <button type="button" class="today-meal-toggle" onclick="app.toggleTodayMeal('${m.id}')">
-            <span class="today-meal-arrow">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
-            </span>
-            <span class="history-meal-name-text">${this.escapeHTML(m.name)}</span>
+          <button type="button" class="today-meal-toggle" onclick="app.toggleTodayMeal('${m.id}')" aria-expanded="${this.openTodayMeals.has(m.id)}">
+            ${this.mealHeadingHTML(m.name, m.totals)}
           </button>
           <div class="today-meal-head-actions">
             ${this.mealMenuButtonHTML('today', m.id)}
@@ -6504,26 +6574,62 @@ class MacroApp {
           <div class="today-food-rows">
             ${(m.items || []).map((i, itemIdx) => this.loggedFoodRowHTML(i, `
               <div class="today-food-actions">
-                <button type="button" class="pill-icon-btn" title="Edit this food"
+                <button type="button" class="pill-icon-btn" title="Edit this food" aria-label="Edit ${this.escapeHTML(i.name || 'this food')}"
                   onclick="app.openEditTodayItemModal('${m.id}', ${itemIdx})">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
                 </button>
-                <button type="button" class="pill-icon-btn danger" title="Remove this food"
+                <button type="button" class="pill-icon-btn danger" title="Remove this food" aria-label="Remove ${this.escapeHTML(i.name || 'this food')}"
                   onclick="app.confirmDeleteTodayItem('${m.id}', ${itemIdx})">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                 </button>
               </div>
             `)).join('')}
           </div>
-          <div class="today-meal-macros autocomplete-macro-pills">
-            <span class="macro-pill kcal">${m.totals.kcal} kcal</span>
-            <span class="macro-pill prot">P: ${m.totals.protein}g</span>
-            <span class="macro-pill carb">C: ${m.totals.carbs}g</span>
-            <span class="macro-pill fat">F: ${m.totals.fat}g</span>
-          </div>
         </div>
       </div>
-    `).join('');
+    `;
+  }
+
+  // A meal's heading, shared by Today's Log and logged days: the arrow, the
+  // name with its time set apart ("Meal 2" · 01:05 PM), the macros under it
+  // and the kcal on the right - so a closed meal still says what was in it.
+  mealHeadingHTML(name, totals, q = '') {
+    const m = /^(.*\S)\s*\((\d{1,2}:\d{2}\s*[AP]M)\)$/i.exec(String(name || ''));
+    const main = m ? m[1] : (name || 'Meal');
+    const time = m ? m[2] : '';
+    const r = v => Math.round(Number(v) || 0);
+    const t = totals || null;
+    return `
+      <span class="today-meal-arrow" aria-hidden="true">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+      </span>
+      <span class="meal-head-text">
+        <span class="meal-head-line">
+          <span class="history-meal-name-text">${q ? this.highlightQuery(main, q) : this.escapeHTML(main)}</span>
+          ${time ? `<span class="meal-time">${this.escapeHTML(time)}</span>` : ''}
+        </span>
+        ${t ? `<span class="meal-head-macros"><span class="prot">P ${r(t.protein)}g</span><span class="carb">C ${r(t.carbs)}g</span><span class="fat">F ${r(t.fat)}g</span></span>` : ''}
+      </span>
+      ${t ? `<span class="meal-head-kcal">${r(t.kcal).toLocaleString()} kcal</span>` : ''}
+    `;
+  }
+
+  // Files the meals left over from an earlier day under that day - joined
+  // to whatever is already logged for it.
+  async fileEarlierMeals(dayKey) {
+    const todayKey = new Date().toDateString();
+    const meals = store.todayMeals.filter(m => (mealLoggedDay(m) || todayKey) === dayKey);
+    if (!meals.length) return;
+    const date = new Date(dayKey);
+    const label = date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+    const existing = this.pastLogsByDay().get(dayKey) || [];
+    const res = await store.finishAndArchiveDay(toISODateLocal(date), existing.length ? existing[0].id : null, meals);
+    this.renderAll();
+    if (res && res.success) {
+      this.showToast(`Filed ${meals.length} ${meals.length === 1 ? 'meal' : 'meals'} under ${label}`, 'success');
+    } else {
+      this.showToast(`Could not file those meals: ${(res && res.error) || 'please try again'}`, 'error');
+    }
   }
 
   toggleHistoryMeal(logId, mealIdx) {
@@ -6545,6 +6651,14 @@ class MacroApp {
     else this.openTodayMeals.delete(mealId);
   }
 
+  // "Quantity (g)", "Quantity (slices)" - an edit dialog's amount, named in
+  // the unit the food was logged in.
+  setQtyFieldLabel(inputId, unitId) {
+    const label = document.querySelector(`label[for="${inputId}"]`);
+    const u = unitInfo(unitId);
+    if (label) label.textContent = `Quantity (${u.count ? (u.plural || u.label) : u.label})`;
+  }
+
   // Per-food edit inside today's log, mirroring the Past History item editor.
   openEditTodayItemModal(mealId, itemIdx) {
     const meal = store.todayMeals.find(m => m.id === mealId);
@@ -6554,6 +6668,7 @@ class MacroApp {
     const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
     set('edit-today-item-name', item.name || '');
     set('edit-today-item-qty', item.qty || 0);
+    this.setQtyFieldLabel('edit-today-item-qty', unitOfEntry(item));
     set('edit-today-item-kcal', Math.round(item.kcal || 0));
     set('edit-today-item-prot', item.protein ?? 0);
     set('edit-today-item-carb', item.carbs ?? 0);
@@ -6649,7 +6764,11 @@ class MacroApp {
     itemsContainer.innerHTML = meal.items.map((item, idx) => `
       <div style="background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-md); padding:8px 10px; display:flex; align-items:center; gap:8px;">
         <input type="text" class="form-input" style="flex:2;" value="${this.escapeHTML(item.name)}" id="edit-item-name-${idx}">
-        <input type="number" class="form-input" style="flex:1;" value="${item.qty}" id="edit-item-qty-${idx}" placeholder="g">
+        <div class="qty-with-unit">
+          <input type="number" class="form-input" value="${item.qty}" id="edit-item-qty-${idx}" step="any" inputmode="decimal"
+                 aria-label="Amount of ${this.escapeHTML(item.name)}, ${this.escapeHTML(unitInfo(unitOfEntry(item)).name.toLowerCase())}">
+          <span class="qty-unit">${this.escapeHTML(unitInfo(unitOfEntry(item)).count ? (unitInfo(unitOfEntry(item)).plural || unitInfo(unitOfEntry(item)).label) : unitInfo(unitOfEntry(item)).label)}</span>
+        </div>
       </div>
     `).join('');
     this.openModal('edit-today-meal-modal');
@@ -6682,23 +6801,33 @@ class MacroApp {
     this.showToast('Meal updated successfully!', 'success');
   }
 
+  // Today's own meals - any left over from an earlier day have their own
+  // "File under" button, so they are not swept into today by this.
+  mealsLoggedToday() {
+    const todayKey = new Date().toDateString();
+    return store.todayMeals.filter(m => (mealLoggedDay(m) || todayKey) === todayKey);
+  }
+
   openLogDayModal() {
-    if (store.todayMeals.length === 0) {
-      this.showToast('No meals logged for today yet to archive', 'error');
+    const meals = this.mealsLoggedToday();
+    if (meals.length === 0) {
+      this.showToast('Nothing logged today yet', 'error');
       return;
     }
-    const totals = store.getTodayTotals();
+    const totals = store.totalsOfMeals(meals);
     const datePicker = document.getElementById('log-day-date-picker');
     if (datePicker) {
       datePicker.value = toISODateLocal(new Date());
     }
     const totalsEl = document.getElementById('log-day-modal-totals');
     if (totalsEl) {
-      totalsEl.textContent = `${totals.kcal.toLocaleString()} kcal • P: ${totals.protein}g • C: ${totals.carbs}g • F: ${totals.fat}g`;
+      totalsEl.innerHTML = `<span class="kcal">${totals.kcal.toLocaleString()} kcal</span>`
+        + `<span class="prot">P ${totals.protein}g</span><span class="carb">C ${totals.carbs}g</span><span class="fat">F ${totals.fat}g</span>`;
     }
     const summaryEl = document.getElementById('log-day-modal-meals-summary');
     if (summaryEl) {
-      summaryEl.textContent = `${store.todayMeals.length} meal(s) logged (${store.todayMeals.map(m => m.name).join(', ')})`;
+      const names = meals.map(m => (m.name || 'Meal').replace(/\s*\((\d{1,2}:\d{2}\s*[AP]M)\)$/i, ' at $1'));
+      summaryEl.textContent = `${meals.length} ${meals.length === 1 ? 'meal' : 'meals'}: ${names.join(', ')}`;
     }
     this.openModal('log-day-modal');
   }
@@ -6716,31 +6845,23 @@ class MacroApp {
       }
     }
 
+    // A day already in the history takes these meals in alongside its own.
+    // Separate logs for one date are merged on the next sync anyway, so
+    // asking first only ever offered a choice that did not stick.
     const existingLog = store.pastLogs.find(l => {
       const logDateStr = (l['Log Session'] || '').split(' - ')[0].trim();
       return logDateStr === targetDateFormatted;
     });
 
-    let mergeId = null;
-    if (existingLog) {
-      const userWantsToMerge = confirm(`A log for ${targetDateFormatted} already exists.\n\nClick OK to put them together (merging macros and meals).\nClick Cancel to create another separate log.`);
-      if (userWantsToMerge) {
-        mergeId = existingLog.id;
-      }
-    }
-
-    const result = await store.finishAndArchiveDay(chosenDate, mergeId);
+    const result = await store.finishAndArchiveDay(chosenDate, existingLog ? existingLog.id : null, this.mealsLoggedToday());
 
     if (result && result.success) {
       this.closeModal('log-day-modal');
       this.renderAll();
-      if (result.merged) {
-        this.showToast('Day logged and merged with existing log!', 'success');
-      } else {
-        this.showToast('Day logged and archived into Past History!', 'success');
-      }
+      const n = result.count || 0;
+      this.showToast(`Day finished - ${n} ${n === 1 ? 'meal' : 'meals'} moved to your history`, 'success');
     } else {
-      this.showToast(`Failed to archive day: ${result?.error || 'Database error'}`, 'error');
+      this.showToast(`Could not finish the day: ${result?.error || 'please try again'}`, 'error');
     }
   }
 
@@ -6754,7 +6875,7 @@ class MacroApp {
       container.innerHTML = `
         <div class="empty-log-box">
           <div class="empty-title">No logged days yet</div>
-          <div class="empty-desc">Days you archive with Log Day show up here, newest first.</div>
+          <div class="empty-desc">Days you finish show up here, newest first.</div>
         </div>
       `;
       return;
@@ -6800,7 +6921,11 @@ class MacroApp {
     const moreHTML = this.listPagerHTML('showMoreHistory', visibleLogs.length, matchingLogs.length);
 
     container.innerHTML = visibleLogs.map(log => {
-      const formattedSession = formatDateTimeDMY(log['Log Session']);
+      // "Tue 6 October 2026": the day, as everywhere else in the app.
+      const logDate = parseAnyDate(log['Log Session']);
+      const formattedSession = isNaN(logDate.getTime())
+        ? formatDateTimeDMY(log['Log Session'])
+        : logDate.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' });
       // A day that matched opens itself - the point of the search is to see
       // the food, not to be handed a closed card that contains it.
       const openClass = (q || this.openHistoryCards.has(log.id)) ? ' open' : '';
@@ -6831,13 +6956,15 @@ class MacroApp {
   // edit and delete actions. Shared by the search list and the day view.
   // openDay adds the jump from a search result to that day on the strip.
   historyCardBodyHTML(log, { openDay = false } = {}) {
+    // The day view has the summary card right above with these same totals,
+    // so the macro line is only for search results.
     return `
       <div class="history-card-body">
-        <div class="history-macros-row">
+        ${openDay ? `<div class="history-macros-row">
           <span>Protein: <strong style="color:var(--protein);">${log['Total Protein']}g</strong></span>
           <span>Carbs: <strong style="color:var(--carbs);">${log['Total Carbs']}g</strong></span>
           <span>Fat: <strong style="color:var(--fat);">${log['Total Fat']}g</strong></span>
-        </div>
+        </div>` : ''}
         <div class="history-items-formatted-list">
           ${this.parseHistoryItemsHTML(log['Items Logged'] || '', log.id)}
         </div>
@@ -6849,7 +6976,7 @@ class MacroApp {
           </button>` : ''}
           <button type="button" class="edit-entry-btn" style="width:auto; padding:4px 10px; font-size:0.75rem; gap:4px;" onclick="app.openEditHistoryLogModal('${log.id}')">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-            Edit Log
+            Edit day
           </button>
           <button type="button" class="delete-entry-btn" style="width:auto; padding:4px 10px; font-size:0.75rem; gap:4px;" onclick="app.confirmDeleteHistoryLog('${log.id}')">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
@@ -6922,6 +7049,19 @@ class MacroApp {
     this.renderHistoryList();
   }
 
+  // "Today", "Yesterday", "Wed 7 Oct", or with the year once it is not this
+  // one - a date as you would say it, in place of 07/10/26.
+  friendlyDate(value) {
+    const d = parseAnyDate(value);
+    if (isNaN(d.getTime())) return String(value || '');
+    const days = Math.round((this.startOfDay(new Date()) - this.startOfDay(d)) / 86400000);
+    if (days === 0) return 'Today';
+    if (days === 1) return 'Yesterday';
+    const opts = { weekday: 'short', day: 'numeric', month: 'short' };
+    if (d.getFullYear() !== new Date().getFullYear()) opts.year = 'numeric';
+    return d.toLocaleDateString('en-GB', opts).replace(',', '');
+  }
+
   showMoreWeights(step = 'more') {
     this.weightVisibleCount = this.nextVisibleCount(this.weightVisibleCount, step);
     this.renderWeightChart();
@@ -6983,7 +7123,9 @@ class MacroApp {
       // buttons: the add everyone reaches for, and ⋮ for the rest. Every
       // macro is always shown - a zero is information too - and the serving
       // they are quoted against leads the line, lit up when it is not 100g.
-      const basis = Number(f.Quantity || 100) || 100;
+      const unit = unitOfEntry(f);
+      const basis = Number(f.Quantity) || unitInfo(unit).base;
+      const usualBasis = unit === 'g' && basis === 100;
       const kcal = f.Kcal || 0;
       const prot = f.Protein || 0;
       const carb = f.Carb || 0;
@@ -6994,7 +7136,7 @@ class MacroApp {
           <div class="food-db-info">
             <span class="food-db-name">${name}${f.barcode ? ` <span class="food-db-barcode-flag" title="Has a saved barcode" aria-label="Has a saved barcode">${SCAN_ICON_SVG}</span>` : ''}</span>
             <div class="food-db-macros">
-              <span class="food-db-basis${basis === 100 ? '' : ' custom-basis'}" title="Macros are per ${basis}g">${basis}g</span>
+              <span class="food-db-basis${usualBasis ? '' : ' custom-basis'}" title="Macros are ${formatBasis(basis, unit)}">${formatAmount(basis, unit)}</span>
               <span class="food-db-macro kcal">${kcal} kcal</span>
               <span class="food-db-macro prot">P ${prot}g</span>
               <span class="food-db-macro carb">C ${carb}g</span>
@@ -7159,10 +7301,7 @@ class MacroApp {
           <div class="history-meal-group today-meal-group${open}${this.isMealBeingEdited('history', logId, mealIdx) ? ' being-edited' : ''}" id="hist-meal-${this.escapeHTML(logId)}-${mealIdx}">
             <div class="history-meal-group-title today-meal-title">
               <button type="button" class="today-meal-toggle" onclick="app.toggleHistoryMeal('${logId}', ${mealIdx})">
-                <span class="today-meal-arrow">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
-                </span>
-                <span class="history-meal-name-text">${this.highlightQuery(m.name || 'Meal', q)}</span>
+                ${this.mealHeadingHTML(m.name || 'Meal', m.totals, q)}
               </button>
               <div class="today-meal-head-actions">
                 ${this.mealMenuButtonHTML('history', logId, mealIdx)}
@@ -7187,12 +7326,6 @@ class MacroApp {
                   </div>
                 `, q)).join('')}
               </div>
-              ${m.totals ? `<div class="today-meal-macros autocomplete-macro-pills">
-                <span class="macro-pill kcal">${m.totals.kcal ?? 0} kcal</span>
-                <span class="macro-pill prot">P: ${m.totals.protein ?? 0}g</span>
-                <span class="macro-pill carb">C: ${m.totals.carbs ?? 0}g</span>
-                <span class="macro-pill fat">F: ${m.totals.fat ?? 0}g</span>
-              </div>` : ''}
             </div>
           </div>
         `;
@@ -7323,6 +7456,7 @@ class MacroApp {
     document.getElementById('edit-hist-item-idx').value = itemIdx;
     document.getElementById('edit-hist-item-name').value = item.name || '';
     document.getElementById('edit-hist-item-qty').value = item.qty ?? 0;
+    this.setQtyFieldLabel('edit-hist-item-qty', unitOfEntry(item));
     document.getElementById('edit-hist-item-kcal').value = Math.round(item.kcal || 0);
     document.getElementById('edit-hist-item-prot').value = item.protein ?? 0;
     document.getElementById('edit-hist-item-carb').value = item.carbs ?? 0;
@@ -7440,6 +7574,7 @@ class MacroApp {
         return {
           Item: i.name,
           Quantity: qty > 0 ? qty : 100,
+          Unit: unitOfEntry(i),
           Kcal: Number(i.kcal) || 0,
           Protein: Number(i.protein ?? i.prot) || 0,
           Carb: Number(i.carbs ?? i.carb) || 0,
@@ -7735,9 +7870,9 @@ class MacroApp {
     const logBtn = document.getElementById('log-meal-submit-btn');
     if (logBtn) {
       const label = logBtn.querySelector('span');
-      if (label) label.textContent = edit ? 'Save Changes' : 'Log Meal';
-      logBtn.title = edit ? 'Save the changes to this meal' : 'Add this meal to Today\'s Log';
+      if (label) label.textContent = edit ? 'Save changes' : 'Log meal';
     }
+    this.refreshLogMealButton();
   }
 
   // The meal being edited, for marking it in Today's Log or a past day.
@@ -7827,15 +7962,15 @@ class MacroApp {
     return `
       <div class="today-food-row">
         <div class="today-food-main">
-          <span class="today-food-qty">${item.qty}g</span>
+          <span class="today-food-qty">${this.escapeHTML(formatAmount(item.qty, unitOfEntry(item)))}</span>
           <span class="today-food-name">${this.highlightQuery(item.name, query)}</span>
           ${actionsHTML}
         </div>
-        <div class="autocomplete-macro-pills today-food-pills">
-          <span class="macro-pill kcal">${kcal} kcal</span>
-          <span class="macro-pill prot">P: ${r1(item.protein ?? item.prot)}g</span>
-          <span class="macro-pill carb">C: ${r1(item.carbs ?? item.carb)}g</span>
-          <span class="macro-pill fat">F: ${r1(item.fat)}g</span>
+        <div class="today-food-macros">
+          <span class="kcal">${kcal.toLocaleString()} kcal</span>
+          <span class="prot">P ${r1(item.protein ?? item.prot)}g</span>
+          <span class="carb">C ${r1(item.carbs ?? item.carb)}g</span>
+          <span class="fat">F ${r1(item.fat)}g</span>
         </div>
       </div>
     `;
@@ -7891,6 +8026,7 @@ class MacroApp {
       : {};
     return {
       name,
+      unit: unitOfEntry(item),
       baseQty,
       baseKcal,
       baseProt,
@@ -7917,6 +8053,7 @@ class MacroApp {
       .map(r => ({
         Item: r.name.trim(),
         Quantity: r.baseQty,
+        Unit: unitOfEntry(r),
         Kcal: r.baseKcal,
         Protein: r.baseProt,
         Carb: r.baseCarb,
@@ -7957,7 +8094,7 @@ class MacroApp {
 
     if (nameInput) nameInput.value = defaultName || '';
     if (summaryEl) {
-      summaryEl.textContent = favItems.map(i => `${i.userQty}g ${i.Item}`).join(' • ');
+      summaryEl.textContent = favItems.map(i => `${formatAmount(i.userQty, unitOfEntry(i))} ${i.Item}`).join(' • ');
     }
     this.openModal('save-favorite-modal');
   }
@@ -7988,7 +8125,7 @@ class MacroApp {
     container.innerHTML = store.favorites.map(f => {
       const items = this.favoriteItemsOf(f);
       const summary = items.length
-        ? items.map(i => `${i.qty}g ${this.escapeHTML(i.name)}`).join(' &bull; ')
+        ? items.map(i => `${this.escapeHTML(formatAmount(i.qty, i.unit))} ${this.escapeHTML(i.name)}`).join(' &bull; ')
         : 'No items saved';
       return `
         <div style="background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-md); padding:10px 12px; display:flex; justify-content:space-between; align-items:center;">
@@ -8027,6 +8164,7 @@ class MacroApp {
       return {
         id: `row-${stamp}-${idx}-${Math.random().toString(36).substr(2, 4)}`,
         name: it.name,
+        unit: it.unit,
         baseQty: it.baseQty,
         baseKcal: it.baseKcal,
         baseProt: it.baseProt,
@@ -8055,6 +8193,27 @@ class MacroApp {
       this.openFavoritesModal();
       this.showToast('Favorite removed', 'success');
     }, 'Are you sure you want to remove this favorite combination?');
+  }
+
+  // Protein and carbs bring 4 kcal a gram, fat 9: what the three targets
+  // add up to, so a calorie target and macros that disagree are caught here
+  // rather than in a day that cannot hit both.
+  refreshTargetsCheck() {
+    const el = document.getElementById('targets-check');
+    if (!el) return;
+    const v = id => parseFloat((document.getElementById(id) || {}).value) || 0;
+    const kcal = v('target-kcal-input');
+    const fromMacros = Math.round(v('target-prot-input') * 4 + v('target-carb-input') * 4 + v('target-fat-input') * 9);
+    if (!fromMacros) {
+      el.textContent = '';
+      return;
+    }
+    const diff = fromMacros - kcal;
+    const close = Math.abs(diff) <= Math.max(25, kcal * 0.02);
+    el.classList.toggle('ok', close);
+    el.textContent = !kcal ? `Your macros add up to ${fromMacros.toLocaleString()} kcal.`
+      : close ? `Your macros add up to ${fromMacros.toLocaleString()} kcal - in line with your calorie target.`
+      : `Your macros add up to ${fromMacros.toLocaleString()} kcal, ${Math.abs(diff).toLocaleString()} ${diff > 0 ? 'more' : 'less'} than your calorie target.`;
   }
 
   async handleTargetsSubmit() {
@@ -8241,16 +8400,9 @@ class MacroApp {
     this.showToast('Timeline reset', 'success');
   }
 
-  // `quiet` skips the chart's entry animation.
-  renderWeightChart(quiet = false) {
+  renderWeightChart() {
     const canvas = document.getElementById('weight-chart-canvas');
     if (!canvas) return;
-    // Drawn while its page is hidden, the chart has no size to draw at and
-    // would redraw the moment it is shown - so that does not count as drawn.
-    const panel = document.getElementById('panel-weights');
-    const sized = !!(panel && panel.offsetParent);
-    this.weightsDrawnFrom = sized ? this.weightsSignature() : null;
-    if (!sized && this.activeView !== 'weights') this.scheduleWeightsWarmUp();
 
     const sortedWeights = [...store.weights].sort((a, b) => parseAnyDate(a.date).getTime() - parseAnyDate(b.date).getTime());
     const hasAnyBf = sortedWeights.some(w => w.bf !== null && w.bf !== undefined);
@@ -8273,7 +8425,7 @@ class MacroApp {
       const moreHTML = this.listPagerHTML('showMoreWeights', rev.length, all.length);
       tableEl.innerHTML = rev.map(w => `
         <div class="weight-entry-row">
-          <span class="weight-entry-date">${formatDateDMYShort(w.date)}</span>
+          <span class="weight-entry-date">${this.escapeHTML(this.friendlyDate(w.date))}</span>
           ${(w.bf !== null && w.bf !== undefined)
             ? `<span class="weight-entry-bf">${w.bf}%<span class="bf-suffix"> BF</span></span>`
             : '<span class="weight-entry-bf is-empty"></span>'}
@@ -8415,7 +8567,6 @@ class MacroApp {
       type: 'line',
       data: { datasets },
       options: {
-        ...(quiet ? { animation: false } : {}),
         responsive: true,
         maintainAspectRatio: false,
         interaction: { mode: 'index', intersect: false },
@@ -8504,8 +8655,48 @@ class MacroApp {
   }
 
   async triggerCloudSync() {
-    this.showToast('Syncing with Supabase cloud...', 'success');
     await store.fetchCloudData();
+    this.showToast(store.syncState === 'error' ? 'Could not sync - see the details' : 'Synced', store.syncState === 'error' ? 'error' : 'success');
+  }
+
+  // The sync dialog in words: the state the header dot is showing, who is
+  // signed in and when the data last came down. The sign-in form only
+  // shows while signed out.
+  refreshSyncDialog() {
+    const modal = document.getElementById('auth-login-modal');
+    if (!modal || !modal.classList.contains('active')) return;
+    const state = store.syncState || (navigator.onLine ? 'synced' : 'offline');
+    const signedIn = !!(store.session && store.session.active);
+    const dot = document.getElementById('modal-sync-dot');
+    const title = document.getElementById('modal-sync-title');
+    const sub = document.getElementById('modal-sync-subtitle');
+    const form = document.getElementById('supabase-auth-form');
+    const syncBtn = document.getElementById('modal-sync-now-btn');
+    const colour = { synced: 'var(--success)', syncing: 'var(--accent)', offline: 'var(--text-muted)', error: 'var(--danger)' }[state] || 'var(--success)';
+    if (dot) {
+      dot.style.background = colour;
+      dot.style.boxShadow = `0 0 6px ${colour}`;
+    }
+    if (title) {
+      title.textContent = !signedIn ? 'Not signed in'
+        : state === 'syncing' ? 'Syncing…'
+        : state === 'offline' ? "You're offline"
+        : state === 'error' ? 'Sync problem'
+        : 'Everything is synced';
+    }
+    if (sub) {
+      const parts = [];
+      if (signedIn && store.session.email) parts.push(`Signed in as ${store.session.email}`);
+      if (state === 'offline') parts.push('What you log stays on this device and syncs when you reconnect.');
+      if (state === 'error' && store.syncError) parts.push(store.syncError);
+      if (store.lastSyncedAt && state !== 'syncing') {
+        parts.push(`Last synced at ${new Date(store.lastSyncedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`);
+      }
+      if (!signedIn) parts.push('Sign in to sync your data across devices.');
+      sub.textContent = parts.join(' · ');
+    }
+    if (form) form.hidden = signedIn;
+    if (syncBtn) syncBtn.hidden = !signedIn;
   }
 
   async handleModalSignUp() {
@@ -8584,6 +8775,7 @@ class MacroApp {
       document.getElementById('target-prot-input').value = store.targets.protein;
       document.getElementById('target-carb-input').value = store.targets.carbs;
       document.getElementById('target-fat-input').value = store.targets.fat;
+      this.refreshTargetsCheck();
     }
     if (modalId === 'favorites-modal') {
       this.openFavoritesModal();
@@ -8599,6 +8791,7 @@ class MacroApp {
     const m = document.getElementById(modalId);
     if (m) {
       m.classList.add('active');
+      if (modalId === 'auth-login-modal') this.refreshSyncDialog();
       // Drop anything that was closed behind our back, so the depth below
       // is an honest count of what is actually on screen.
       this.getTopModal();

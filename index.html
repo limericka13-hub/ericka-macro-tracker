@@ -23,26 +23,21 @@
 <body>
 
 <!-- Authentication / Login Screen -->
-<div id="login-screen-view" class="login-screen-container">
+<div id="login-screen-view" class="login-screen-container" role="main">
   <div class="login-card">
     <div class="login-brand-header">
       <div class="login-brand-icon">
         <img src="/icon.svg?v=5" alt="Ericka's Macro Tracker" width="44" height="44">
       </div>
       <h1 class="login-brand-title">Ericka's Macro Tracker</h1>
-      <p class="login-brand-subtitle">Cross-device nutrition logging, meal builder & weight ledger</p>
-    </div>
-
-    <div class="login-status-badge">
-      <span class="sync-circle-dot" style="background:var(--success); box-shadow:0 0 6px var(--success);"></span>
-      <span>Connected to Supabase Cloud</span>
+      <p class="login-brand-subtitle">Log your meals, hit your macros and track your weight - on your phone and computer alike.</p>
     </div>
 
     <div id="login-auth-error-msg" class="auth-error-alert" style="display:none;"></div>
 
     <form id="main-login-form" class="login-form">
       <div class="form-group">
-        <label for="login-email-input">Account Email</label>
+        <label for="login-email-input">Email</label>
         <input type="email" id="login-email-input" class="form-input" placeholder="name@example.com" required autocomplete="email">
       </div>
       <div class="form-group">
@@ -53,16 +48,16 @@
       <div class="login-actions">
         <button type="submit" id="login-signin-btn" class="btn-primary login-submit-btn">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><polyline points="10 17 15 12 10 7"></polyline><line x1="15" y1="12" x2="3" y2="12"></line></svg>
-          <span>Sign In & Sync Cloud</span>
+          <span id="login-signin-label">Sign in</span>
         </button>
         <button type="button" id="login-signup-btn" class="btn-secondary" style="width:100%; padding:10px; font-size:0.85rem; font-weight:600;">
-          <span>Create New Supabase Account</span>
+          <span>Create an account</span>
         </button>
       </div>
     </form>
 
     <div class="login-footer-info">
-      <span>Auto-syncs across Desktop & Mobile in real-time.</span>
+      <span>Everything you log syncs to all your devices.</span>
     </div>
   </div>
 </div>
@@ -95,7 +90,7 @@
 
     <!-- Header Actions -->
     <div class="header-actions">
-      <button id="sync-status-circle-btn" class="sync-circle-btn synced" onclick="app.openModal('auth-login-modal')" title="Supabase Database Status & Sync">
+      <button id="sync-status-circle-btn" class="sync-circle-btn synced" onclick="app.openModal('auth-login-modal')" title="Everything is synced (tap for details)" aria-label="Sync status">
         <span class="sync-circle-dot"></span>
       </button>
       <button id="pwa-install-btn" class="icon-btn install-app-btn" type="button" title="Install app" style="display:none;">
@@ -110,7 +105,12 @@
           <button type="button" class="header-menu-item" role="menuitem"
                   onclick="app.closeHeaderMenu(); app.openModal('targets-modal');">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-            <span>Set Daily Targets</span>
+            <span>Daily targets</span>
+          </button>
+          <button type="button" class="header-menu-item" role="menuitem"
+                  onclick="app.closeHeaderMenu(); app.openModal('auth-login-modal');">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25"></path><polyline points="8 17 12 21 16 17"></polyline><line x1="12" y1="12" x2="12" y2="21"></line></svg>
+            <span>Sync &amp; account</span>
           </button>
           <button type="button" class="header-menu-item" role="menuitem"
                   onclick="app.closeHeaderMenu(); app.openExportModal();">
@@ -124,7 +124,7 @@
           </button>
           <button type="button" class="header-menu-item danger" role="menuitem" onclick="app.handleLogout()">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-            <span>Sign Out</span>
+            <span>Sign out</span>
           </button>
         </div>
       </div>
@@ -137,7 +137,7 @@
   </div>
 
   <!-- VIEW PANEL 1: TRACKER DASHBOARD -->
-  <main id="panel-dashboard" class="view-panel" style="display:flex; flex-direction:column; gap:8px;">
+  <main id="panel-dashboard" class="view-panel" aria-label="Tracker" style="display:flex; flex-direction:column; gap:8px;">
 
     <!-- 0. Week Strip: picks the day the rest of this page shows -->
     <div id="week-strip-card" class="week-strip-card">
@@ -259,6 +259,7 @@
               <span id="day-target-note" class="day-target-note" hidden></span>
             </span>
           </div>
+<div class="stat-progress kcal" id="day-progress-kcal" role="progressbar" aria-label="Calories eaten of target" aria-valuemin="0"><span class="stat-progress-fill"></span></div>
           <span id="day-remaining-kcal" class="val-remaining">2,000 left</span>
         </div>
         <div class="subtotal-stat-box box-prot">
@@ -269,6 +270,7 @@
             <span id="day-subtotal-prot" class="val-main" style="color:var(--protein);">0g</span>
             <span id="day-target-prot-sub" class="val-sub">/ 180g</span>
           </div>
+<div class="stat-progress prot" id="day-progress-prot" role="progressbar" aria-label="Protein eaten of target" aria-valuemin="0"><span class="stat-progress-fill"></span></div>
           <span id="day-remaining-prot" class="val-remaining">180g left</span>
         </div>
         <div class="subtotal-stat-box box-carb">
@@ -279,6 +281,7 @@
             <span id="day-subtotal-carb" class="val-main" style="color:var(--carbs);">0g</span>
             <span id="day-target-carb-sub" class="val-sub">/ 200g</span>
           </div>
+<div class="stat-progress carb" id="day-progress-carb" role="progressbar" aria-label="Carbs eaten of target" aria-valuemin="0"><span class="stat-progress-fill"></span></div>
           <span id="day-remaining-carb" class="val-remaining">200g left</span>
         </div>
         <div class="subtotal-stat-box box-fat">
@@ -289,6 +292,7 @@
             <span id="day-subtotal-fat" class="val-main" style="color:var(--fat);">0g</span>
             <span id="day-target-fat-sub" class="val-sub">/ 55g</span>
           </div>
+<div class="stat-progress fat" id="day-progress-fat" role="progressbar" aria-label="Fat eaten of target" aria-valuemin="0"><span class="stat-progress-fill"></span></div>
           <span id="day-remaining-fat" class="val-remaining">55g left</span>
         </div>
       </div>
@@ -309,9 +313,9 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line></svg>
             Voice
           </button>
-          <button id="builder-save-fav-btn" class="pill-action-btn" onclick="app.openSaveFavoriteModal()" title="Save meal as favorite combo">
+          <button id="builder-save-fav-btn" class="pill-action-btn" onclick="app.openSaveFavoriteModal()" title="Save these foods as a favorite combo, to load again in one tap">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
-            Save
+            Save combo
           </button>
         </div>
       </div>
@@ -336,8 +340,8 @@
       </button>
 
       <!-- Meal Subtotal Bar -->
-      <div class="meal-subtotal-bar">
-        <span class="meal-subtotal-lbl">MEAL SUBTOTAL:</span>
+      <div class="meal-subtotal-bar" hidden>
+        <span class="meal-subtotal-lbl">This meal</span>
         <div class="meal-subtotal-vals">
           <span id="meal-subtotal-val-kcal" class="kcal">0 kcal</span>
           <span id="meal-subtotal-val-prot" class="prot">P: 0.0g</span>
@@ -349,7 +353,7 @@
       <!-- Log Meal Primary Button -->
       <button id="log-meal-submit-btn" class="log-meal-btn primary-log-btn" title="Add this meal to Today's Log">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
-        <span>Log Meal</span>
+        <span>Log meal</span>
       </button>
     </div>
 
@@ -359,25 +363,18 @@
         <div class="todays-log-title">
           <span>Today's Log</span>
         </div>
+        <!-- Today's meals only; the summary card above has the macros -->
+        <span id="todays-log-total" class="history-total-kcal" hidden></span>
       </div>
 
       <div id="todays-logged-meals-list" class="logged-meals-list"></div>
 
-      <!-- Today's Live Subtotal Macros Bar -->
-      <div class="todays-subtotal-bar">
-        <span class="todays-subtotal-lbl">TODAY'S SUBTOTAL:</span>
-        <div class="todays-subtotal-vals">
-          <span id="todays-subtotal-val-kcal" class="kcal">0 kcal</span>
-          <span id="todays-subtotal-val-prot" class="prot">P: 0.0g</span>
-          <span id="todays-subtotal-val-carb" class="carb">C: 0.0g</span>
-          <span id="todays-subtotal-val-fat" class="fat">F: 0.0g</span>
-        </div>
-      </div>
-
-      <!-- Log Day Primary Button -->
-      <button class="log-meal-btn primary-log-btn" onclick="app.openLogDayModal()" title="Select date and archive into Past History">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
-        <span>Log Day</span>
+      <!-- Files today's meals into the history. Meals count on their own day
+           either way, so this is housekeeping rather than the main action. -->
+      <button type="button" id="finish-day-btn" class="finish-day-btn" onclick="app.openLogDayModal()" hidden
+              title="Move today's meals into your history">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><polyline points="9 15 11 17 15 13"></polyline></svg>
+        <span>Finish day</span>
       </button>
     </div>
 
@@ -386,11 +383,11 @@
   </main>
 
   <!-- VIEW PANEL 2: WEIGHT TRACKER -->
-  <section id="panel-weights" class="view-panel" style="display:none; flex-direction:column; gap:12px;">
+  <section id="panel-weights" class="view-panel" role="main" aria-label="Weight" style="display:none; flex-direction:column; gap:12px;">
     <div class="daily-summary-card">
       <div class="day-header-row" style="margin-bottom:2px;">
         <div>
-          <h2 style="font-size:1.1rem; font-weight:800;">Weight Tracker</h2>
+          <h2 style="font-size:1.1rem; font-weight:800;">Weight</h2>
         </div>
         <div class="weight-chart-controls" style="display:flex; align-items:center; gap:6px;">
           <div id="weight-mode-toggle" class="weight-mode-toggle" style="display:none;">
@@ -398,7 +395,7 @@
             <button type="button" class="weight-mode-btn" data-mode="bf" onclick="app.setWeightChartMode('bf')">Body fat</button>
             <button type="button" class="weight-mode-btn active" data-mode="both" onclick="app.setWeightChartMode('both')">Both</button>
           </div>
-          <button type="button" class="btn-secondary" id="reset-weight-zoom-btn" style="padding:4px 10px; font-size:0.75rem; border-radius:var(--radius-pill);" onclick="app.resetWeightChartPan()">Fit Timeline</button>
+          <button type="button" class="btn-secondary" id="reset-weight-zoom-btn" style="padding:4px 10px; font-size:0.75rem; border-radius:var(--radius-pill);" onclick="app.resetWeightChartPan()">Fit timeline</button>
         </div>
       </div>
       <div class="weight-chart-wrapper" id="weight-chart-wrapper" style="height: 240px; width: 100%; position:relative;">
@@ -417,14 +414,14 @@
           <label for="weight-bf-input">Body fat (%)</label>
           <input type="number" inputmode="decimal" step="0.1" min="0" max="100" id="weight-bf-input" placeholder="optional" class="form-input">
         </div>
-        <button type="submit" class="btn-primary weight-save-btn">Save Entry</button>
+        <button type="submit" class="btn-primary weight-save-btn">Save weigh-in</button>
       </form>
       <div id="weight-entries-table" style="display:flex; flex-direction:column; gap:5px; margin-top:6px;"></div>
     </div>
   </section>
 
   <!-- VIEW PANEL 3: FOOD LIST -->
-  <section id="panel-foods" class="view-panel" style="display:none; flex-direction:column; gap:12px;">
+  <section id="panel-foods" class="view-panel" role="main" aria-label="Foods" style="display:none; flex-direction:column; gap:12px;">
     <div class="daily-summary-card">
       <div class="foods-header-row">
         <div class="foods-title-group">
@@ -492,7 +489,6 @@
           <div class="carry-amount-row">
             <input type="number" inputmode="numeric" id="carry-amount-input" class="form-input" min="1" step="10"
                    data-no-autofocus oninput="app.setCarrySheet({ amount: this.value }, false)">
-            <div id="carry-quick" class="carry-quick"></div>
           </div>
         </div>
         <div id="carry-dest" class="carry-dest"></div>
@@ -512,7 +508,7 @@
 <div id="edit-weight-modal" class="modal-overlay">
   <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="edit-weight-modal-title" style="max-width:400px;">
     <div class="modal-header">
-      <h2 id="edit-weight-modal-title">Edit Weight Entry</h2>
+      <h2 id="edit-weight-modal-title">Edit weigh-in</h2>
       <button type="button" class="icon-btn" data-modal-close>&#10005;</button>
     </div>
     <form id="edit-weight-form">
@@ -548,7 +544,7 @@
 <div id="export-data-modal" class="modal-overlay">
   <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="export-data-modal-title" style="max-width:420px;">
     <div class="modal-header">
-      <h2 id="export-data-modal-title">Download My Data</h2>
+      <h2 id="export-data-modal-title">Download my data</h2>
       <button type="button" class="icon-btn" data-modal-close>&#10005;</button>
     </div>
     <div class="modal-body">
@@ -585,7 +581,7 @@
 <div id="delete-confirm-modal" class="modal-overlay">
   <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="delete-confirm-modal-title" style="max-width:380px;">
     <div class="modal-header">
-      <h2 id="delete-confirm-modal-title">Confirm Deletion</h2>
+      <h2 id="delete-confirm-modal-title">Are you sure?</h2>
       <button type="button" class="icon-btn" data-modal-close>✕</button>
     </div>
     <div class="modal-body">
@@ -604,20 +600,20 @@
 <div id="save-favorite-modal" class="modal-overlay">
   <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="save-favorite-modal-title" style="max-width:420px;">
     <div class="modal-header">
-      <h2 id="save-favorite-modal-title">Save Favorite Combo</h2>
+      <h2 id="save-favorite-modal-title">Save as a favorite combo</h2>
       <button type="button" class="icon-btn" data-modal-close>✕</button>
     </div>
     <form id="save-favorite-form">
       <div class="modal-body">
         <div class="form-group">
-          <label for="save-favorite-name-input">Favorite Meal Name</label>
+          <label for="save-favorite-name-input">Name</label>
           <input type="text" id="save-favorite-name-input" class="form-input" placeholder="e.g. Protein Shake Combo" required>
         </div>
         <div id="save-favorite-items-summary" style="font-size:0.78rem; color:var(--text-muted); background:var(--bg-input); padding:10px 12px; border-radius:var(--radius-md); border:1px solid var(--border);"></div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn-secondary" data-modal-close>Cancel</button>
-        <button type="submit" class="btn-primary">Save Favorite</button>
+        <button type="submit" class="btn-primary">Save combo</button>
       </div>
     </form>
   </div>
@@ -627,7 +623,7 @@
 <div id="edit-today-meal-modal" class="modal-overlay">
   <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="edit-today-meal-modal-title">
     <div class="modal-header">
-      <h2 id="edit-today-meal-modal-title">Edit Today's Meal</h2>
+      <h2 id="edit-today-meal-modal-title">Edit meal</h2>
       <button type="button" class="icon-btn" data-modal-close>✕</button>
     </div>
     <form id="edit-today-meal-form">
@@ -651,7 +647,7 @@
 <div id="edit-history-log-modal" class="modal-overlay">
   <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="edit-history-log-modal-title">
     <div class="modal-header">
-      <h2 id="edit-history-log-modal-title">Edit Past History Log</h2>
+      <h2 id="edit-history-log-modal-title">Edit day</h2>
       <button type="button" class="icon-btn" data-modal-close>✕</button>
     </div>
     <form id="edit-history-log-form">
@@ -704,7 +700,7 @@
 <div id="edit-history-item-modal" class="modal-overlay">
   <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="edit-history-item-modal-title" style="max-width:440px;">
     <div class="modal-header">
-      <h2 id="edit-history-item-modal-title">Edit Food Item</h2>
+      <h2 id="edit-history-item-modal-title">Edit logged food</h2>
       <button type="button" class="icon-btn" data-modal-close>✕</button>
     </div>
     <form id="edit-history-item-form">
@@ -719,27 +715,27 @@
         </div>
         <div class="form-group">
           <label for="edit-hist-item-qty">Quantity (g)</label>
-          <input type="number" inputmode="decimal" step="0.1" id="edit-hist-item-qty" class="form-input" required>
+          <input type="number" inputmode="decimal" step="any" id="edit-hist-item-qty" class="form-input" required>
           <span style="font-size:0.72rem; color:var(--text-dim); margin-top:3px;">
             Changing the quantity rescales the macros below automatically.
           </span>
         </div>
         <div class="form-group">
           <label for="edit-hist-item-kcal">Kcal</label>
-          <input type="number" inputmode="numeric" step="1" id="edit-hist-item-kcal" class="form-input" required>
+          <input type="number" inputmode="decimal" step="any" id="edit-hist-item-kcal" class="form-input" required>
         </div>
         <div class="form-row macro-trio">
           <div class="form-group">
             <label for="edit-hist-item-prot">Protein (g)</label>
-            <input type="number" inputmode="decimal" step="0.1" id="edit-hist-item-prot" class="form-input" required>
+            <input type="number" inputmode="decimal" step="any" id="edit-hist-item-prot" class="form-input" required>
           </div>
           <div class="form-group">
             <label for="edit-hist-item-carb">Carbs (g)</label>
-            <input type="number" inputmode="decimal" step="0.1" id="edit-hist-item-carb" class="form-input" required>
+            <input type="number" inputmode="decimal" step="any" id="edit-hist-item-carb" class="form-input" required>
           </div>
           <div class="form-group">
             <label for="edit-hist-item-fat">Fat (g)</label>
-            <input type="number" inputmode="decimal" step="0.1" id="edit-hist-item-fat" class="form-input" required>
+            <input type="number" inputmode="decimal" step="any" id="edit-hist-item-fat" class="form-input" required>
           </div>
         </div>
         <span style="font-size:0.74rem; color:var(--text-dim);">
@@ -758,7 +754,7 @@
 <div id="favorites-modal" class="modal-overlay">
   <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="favorites-modal-title">
     <div class="modal-header">
-      <h2 id="favorites-modal-title">Favorite Combos</h2>
+      <h2 id="favorites-modal-title">Favorite combos</h2>
       <button type="button" class="icon-btn" data-modal-close>✕</button>
     </div>
     <div class="modal-body" id="favorites-list-modal-body" style="gap:8px;"></div>
@@ -769,33 +765,35 @@
 <div id="targets-modal" class="modal-overlay">
   <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="targets-modal-title">
     <div class="modal-header">
-      <h2 id="targets-modal-title">Daily Macro Targets</h2>
-      <button type="button" class="icon-btn" data-modal-close>✕</button>
+      <h2 id="targets-modal-title">Daily targets</h2>
+      <button type="button" class="icon-btn" data-modal-close aria-label="Close">✕</button>
     </div>
     <form id="target-macros-form">
       <div class="modal-body">
         <div class="form-group">
-          <label>Daily Kcal Target</label>
-          <input type="number" inputmode="numeric" id="target-kcal-input" class="form-input" required>
+          <label for="target-kcal-input">Calories (kcal)</label>
+          <input type="number" inputmode="numeric" id="target-kcal-input" class="form-input" required oninput="app.refreshTargetsCheck()">
         </div>
         <div class="form-row macro-trio">
           <div class="form-group">
-            <label>Protein (g)</label>
-            <input type="number" inputmode="numeric" id="target-prot-input" class="form-input" required>
+            <label for="target-prot-input">Protein (g)</label>
+            <input type="number" inputmode="decimal" step="any" id="target-prot-input" class="form-input" required oninput="app.refreshTargetsCheck()">
           </div>
           <div class="form-group">
-            <label>Carbs (g)</label>
-            <input type="number" inputmode="numeric" id="target-carb-input" class="form-input" required>
+            <label for="target-carb-input">Carbs (g)</label>
+            <input type="number" inputmode="decimal" step="any" id="target-carb-input" class="form-input" required oninput="app.refreshTargetsCheck()">
           </div>
           <div class="form-group">
-            <label>Fat (g)</label>
-            <input type="number" inputmode="numeric" id="target-fat-input" class="form-input" required>
+            <label for="target-fat-input">Fat (g)</label>
+            <input type="number" inputmode="decimal" step="any" id="target-fat-input" class="form-input" required oninput="app.refreshTargetsCheck()">
           </div>
         </div>
+        <!-- What the three macros add up to, against the calorie target -->
+        <p id="targets-check" class="targets-check" role="status"></p>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn-secondary" data-modal-close>Cancel</button>
-        <button type="submit" class="btn-primary">Save Targets</button>
+        <button type="submit" class="btn-primary">Save targets</button>
       </div>
     </form>
   </div>
@@ -805,55 +803,56 @@
 <div id="auth-login-modal" class="modal-overlay">
   <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="auth-login-modal-title" style="max-width:480px;">
     <div class="modal-header">
-      <h2 id="auth-login-modal-title">Supabase Cloud Connection</h2>
-      <button type="button" class="icon-btn" data-modal-close>✕</button>
+      <h2 id="auth-login-modal-title">Sync &amp; account</h2>
+      <button type="button" class="icon-btn" data-modal-close aria-label="Close">✕</button>
     </div>
     <div class="modal-body" style="display:flex; flex-direction:column; gap:12px;">
-      <div id="supabase-status-indicator-box" style="background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-md); padding:12px; font-size:0.8rem;">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <div style="display:flex; align-items:center; gap:8px;">
-            <span id="modal-sync-dot" class="sync-circle-dot" style="background:var(--success); box-shadow:0 0 6px var(--success);"></span>
-            <strong id="modal-sync-title" style="color:var(--text-main);">Connected to Supabase</strong>
-          </div>
-          <button type="button" class="btn-secondary" style="padding:4px 10px; font-size:0.72rem;" onclick="app.testSupabaseConnection()">Test Tables</button>
+      <!-- What the dot in the header means, in words -->
+      <div id="supabase-status-indicator-box" class="sync-status-box" role="status">
+        <span id="modal-sync-dot" class="sync-circle-dot"></span>
+        <div class="sync-status-text">
+          <strong id="modal-sync-title">Everything is synced</strong>
+          <span id="modal-sync-subtitle" class="sync-status-sub"></span>
         </div>
-        <div id="modal-sync-subtitle" style="margin-top:6px; font-size:0.75rem; color:var(--text-muted); word-break:break-all;">
-          Project URL: <code id="modal-project-url-display">not connected</code>
-        </div>
-        <div id="supabase-diagnostics-results" style="margin-top:8px; font-size:0.74rem; display:none; flex-direction:column; gap:4px; border-top:1px solid var(--border); padding-top:8px;"></div>
       </div>
+      <!-- Only while signed out -->
       <form id="supabase-auth-form" style="display:flex; flex-direction:column; gap:10px;">
         <div class="form-group">
-          <label>Account Email</label>
-          <input type="email" id="auth-email-input" class="form-input" placeholder="name@example.com">
+          <label for="auth-email-input">Email</label>
+          <input type="email" id="auth-email-input" class="form-input" placeholder="name@example.com" autocomplete="email">
         </div>
         <div class="form-group">
-          <label>Password</label>
-          <input type="password" id="auth-password-input" class="form-input" placeholder="••••••••">
+          <label for="auth-password-input">Password</label>
+          <input type="password" id="auth-password-input" class="form-input" placeholder="••••••••" autocomplete="current-password">
         </div>
         <div style="display:flex; gap:8px;">
-          <button type="submit" class="btn-primary" style="flex:1;">Sign In & Sync</button>
-          <button type="button" id="modal-signup-btn" class="btn-secondary" style="flex:1;" onclick="app.handleModalSignUp()">Create Account</button>
+          <button type="submit" class="btn-primary" style="flex:1;">Sign in</button>
+          <button type="button" id="modal-signup-btn" class="btn-secondary" style="flex:1;" onclick="app.handleModalSignUp()">Create an account</button>
         </div>
       </form>
-      <details style="background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-md); padding:10px 12px; font-size:0.78rem; color:var(--text-muted);">
-        <summary style="cursor:pointer; font-weight:600; color:var(--text-main); user-select:none;">Advanced: Supabase API Keys & URL</summary>
+      <details class="sync-advanced">
+        <summary>Advanced: connection details</summary>
         <div style="margin-top:10px; display:flex; flex-direction:column; gap:8px;">
+          <div class="sync-advanced-row">
+            <span>Project: <code id="modal-project-url-display">not connected</code></span>
+            <button type="button" class="btn-secondary" style="padding:4px 10px; font-size:0.72rem;" onclick="app.testSupabaseConnection()">Test tables</button>
+          </div>
+          <div id="supabase-diagnostics-results" style="font-size:0.74rem; display:none; flex-direction:column; gap:4px; border-top:1px solid var(--border); padding-top:8px;"></div>
           <div>
-            <label style="font-size:0.72rem; color:var(--text-dim); display:block; margin-bottom:2px;">Supabase Project URL</label>
+            <label for="config-supabase-url" style="font-size:0.72rem; color:var(--text-muted); display:block; margin-bottom:2px;">Supabase project URL</label>
             <input type="text" id="config-supabase-url" class="form-input" style="font-size:0.75rem; font-family:var(--font-mono);" value="">
           </div>
           <div>
-            <label style="font-size:0.72rem; color:var(--text-dim); display:block; margin-bottom:2px;">Supabase Anon / Service Role Key</label>
+            <label for="config-supabase-key" style="font-size:0.72rem; color:var(--text-muted); display:block; margin-bottom:2px;">Supabase anon key</label>
             <input type="text" id="config-supabase-key" class="form-input" style="font-size:0.75rem; font-family:var(--font-mono);" value="">
           </div>
-          <button type="button" class="btn-secondary" style="padding:6px 12px; align-self:flex-start;" onclick="app.saveCustomSupabaseConfig()">Save Custom Keys & Reconnect</button>
+          <button type="button" class="btn-secondary" style="padding:6px 12px; align-self:flex-start;" onclick="app.saveCustomSupabaseConfig()">Save keys &amp; reconnect</button>
         </div>
       </details>
     </div>
     <div class="modal-footer" style="display:flex; justify-content:space-between; align-items:center;">
       <button type="button" class="btn-secondary" data-modal-close>Close</button>
-      <button type="button" class="btn-primary" onclick="app.triggerCloudSync()">Sync All Data Now</button>
+      <button type="button" id="modal-sync-now-btn" class="btn-primary" onclick="app.triggerCloudSync()">Sync now</button>
     </div>
   </div>
 </div>
@@ -862,31 +861,25 @@
 <div id="log-day-modal" class="modal-overlay">
   <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="log-day-modal-title" style="max-width:420px;">
     <div class="modal-header">
-      <h2 id="log-day-modal-title">Log & Archive Day</h2>
-      <button type="button" class="icon-btn" data-modal-close>✕</button>
+      <h2 id="log-day-modal-title">Finish the day</h2>
+      <button type="button" class="icon-btn" data-modal-close aria-label="Close">✕</button>
     </div>
     <form id="log-day-archive-form">
       <div class="modal-body">
-        <div style="background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-md); padding:10px 12px; font-size:0.82rem;">
-          <div style="font-weight:700; color:var(--text-main); margin-bottom:4px;">Day Totals to Archive</div>
-          <div id="log-day-modal-totals" style="color:var(--accent); font-family:var(--font-mono); font-size:0.86rem; font-weight:700;">
-            0 kcal • P: 0g • C: 0g • F: 0g
-          </div>
-          <div id="log-day-modal-meals-summary" style="font-size:0.75rem; color:var(--text-muted); margin-top:4px;">
-            0 meals logged
-          </div>
+        <p class="modal-intro">Moves today's meals out of Today's Log and into your history. You can still open, edit or copy them from there.</p>
+        <div class="finish-day-summary">
+          <div id="log-day-modal-totals" class="finish-day-totals">0 kcal</div>
+          <div id="log-day-modal-meals-summary" class="finish-day-meals">No meals</div>
         </div>
         <div class="form-group">
-          <label for="log-day-date-picker">Select Date for this Log</label>
+          <label for="log-day-date-picker">File them under</label>
           <input type="date" id="log-day-date-picker" class="form-input" required>
-          <span style="font-size:0.74rem; color:var(--text-dim); margin-top:3px;">
-            You can log for today or assign this log to a past/custom date.
-          </span>
+          <span class="field-hint">Usually today. Pick another day if these meals belong to it - anything already logged for that day is kept and these are added to it.</span>
         </div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn-secondary" data-modal-close>Cancel</button>
-        <button type="submit" class="btn-primary">Confirm & Archive Day</button>
+        <button type="submit" class="btn-primary">Finish day</button>
       </div>
     </form>
   </div>
@@ -896,7 +889,7 @@
 <div id="save-food-db-modal" class="modal-overlay">
   <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="save-food-modal-title" style="max-width:440px;">
     <div class="modal-header">
-      <h2 id="save-food-modal-title">Save to Food List</h2>
+      <h2 id="save-food-modal-title">New food</h2>
       <button type="button" class="icon-btn" data-modal-close>✕</button>
     </div>
     <form id="save-food-db-form">
@@ -909,30 +902,39 @@
           <label for="save-food-name-input">Food Item Name</label>
           <input type="text" id="save-food-name-input" class="form-input" placeholder="e.g. Greek Yogurt, Oats" required>
         </div>
-        <div class="form-group">
-          <label for="save-food-base-qty-input">Base Serving Size (g)</label>
-          <input type="number" inputmode="numeric" id="save-food-base-qty-input" class="form-input" value="100" required>
+        <!-- What the kcal and macros below are quoted against: 100 g, 1 slice, 1 L... -->
+        <div class="form-row serving-row">
+          <div class="form-group">
+            <label for="save-food-base-qty-input">Serving size</label>
+            <input type="number" inputmode="decimal" step="any" min="0" id="save-food-base-qty-input" class="form-input" value="100" required
+                   oninput="app.refreshServingHint()">
+          </div>
+          <div class="form-group">
+            <label for="save-food-unit-select">Serving type</label>
+            <select id="save-food-unit-select" class="form-input" onchange="app.handleFoodUnitChange(this.value)"></select>
+          </div>
         </div>
+        <p id="save-food-serving-hint" class="serving-hint">The kcal and macros below are per 100g.</p>
         <div class="form-group">
           <label for="save-food-kcal-input">Kcal</label>
-          <input type="number" inputmode="numeric" step="1" id="save-food-kcal-input" class="form-input" placeholder="0" required>
+          <input type="number" inputmode="decimal" step="any" id="save-food-kcal-input" class="form-input" placeholder="0" required>
         </div>
         <div class="form-row macro-trio">
           <div class="form-group">
             <label for="save-food-prot-input">Protein (g)</label>
-            <input type="number" inputmode="decimal" step="0.1" id="save-food-prot-input" class="form-input" placeholder="0.0" required>
+            <input type="number" inputmode="decimal" step="any" id="save-food-prot-input" class="form-input" placeholder="0.0" required>
           </div>
           <div class="form-group">
             <label for="save-food-carb-input">Carbs (g)</label>
-            <input type="number" inputmode="decimal" step="0.1" id="save-food-carb-input" class="form-input" placeholder="0.0" required>
+            <input type="number" inputmode="decimal" step="any" id="save-food-carb-input" class="form-input" placeholder="0.0" required>
           </div>
           <div class="form-group">
             <label for="save-food-fat-input">Fat (g)</label>
-            <input type="number" inputmode="decimal" step="0.1" id="save-food-fat-input" class="form-input" placeholder="0.0" required>
+            <input type="number" inputmode="decimal" step="any" id="save-food-fat-input" class="form-input" placeholder="0.0" required>
           </div>
         </div>
         <span style="font-size:0.74rem; color:var(--text-dim);">
-          This food will be saved to your Food List and Supabase cloud for future auto-complete.
+          Saved foods come up when you search in the Meal Builder, on all your devices.
         </span>
       </div>
       <div class="modal-footer">
@@ -947,7 +949,7 @@
 <div id="barcode-scanner-modal" class="modal-overlay">
   <div class="modal-box barcode-scanner-box" role="dialog" aria-modal="true" aria-labelledby="barcode-scanner-modal-title" style="max-width:440px;">
     <div class="modal-header">
-      <h2 id="barcode-scanner-modal-title">Scan Barcode</h2>
+      <h2 id="barcode-scanner-modal-title">Scan a barcode</h2>
       <button type="button" class="icon-btn" data-modal-close aria-label="Close">✕</button>
     </div>
     <div class="modal-body">
@@ -1005,7 +1007,7 @@
 <div id="barcode-result-modal" class="modal-overlay">
   <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="barcode-result-modal-title" style="max-width:420px;">
     <div class="modal-header">
-      <h2 id="barcode-result-modal-title">Product Found</h2>
+      <h2 id="barcode-result-modal-title">Product found</h2>
       <button type="button" class="icon-btn" data-modal-close>✕</button>
     </div>
     <div class="modal-body" id="barcode-result-body"></div>
@@ -1021,7 +1023,7 @@
 <div id="barcode-notfound-modal" class="modal-overlay">
   <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="barcode-notfound-modal-title" style="max-width:400px;">
     <div class="modal-header">
-      <h2 id="barcode-notfound-modal-title">Barcode Not Found</h2>
+      <h2 id="barcode-notfound-modal-title">Barcode not found</h2>
       <button type="button" class="icon-btn" data-modal-close>✕</button>
     </div>
     <div class="modal-body">
@@ -1043,7 +1045,7 @@
 <div id="voice-log-modal" class="modal-overlay">
   <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="voice-log-modal-title" style="max-width:440px;">
     <div class="modal-header">
-      <h2 id="voice-log-modal-title">Say What You Ate</h2>
+      <h2 id="voice-log-modal-title">Say what you ate</h2>
       <button type="button" class="icon-btn" data-modal-close>✕</button>
     </div>
     <div class="modal-body">
@@ -1075,7 +1077,7 @@
 <div id="edit-today-item-modal" class="modal-overlay">
   <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="edit-today-item-modal-title" style="max-width:440px;">
     <div class="modal-header">
-      <h2 id="edit-today-item-modal-title">Edit Food</h2>
+      <h2 id="edit-today-item-modal-title">Edit logged food</h2>
       <button type="button" class="icon-btn" data-modal-close>✕</button>
     </div>
     <form id="edit-today-item-form">
@@ -1086,24 +1088,24 @@
         </div>
         <div class="form-group">
           <label for="edit-today-item-qty">Quantity (g)</label>
-          <input type="number" inputmode="decimal" step="0.1" id="edit-today-item-qty" class="form-input" required>
+          <input type="number" inputmode="decimal" step="any" id="edit-today-item-qty" class="form-input" required>
         </div>
         <div class="form-group">
           <label for="edit-today-item-kcal">Kcal</label>
-          <input type="number" inputmode="numeric" step="1" id="edit-today-item-kcal" class="form-input" required>
+          <input type="number" inputmode="decimal" step="any" id="edit-today-item-kcal" class="form-input" required>
         </div>
         <div class="form-row macro-trio">
           <div class="form-group">
             <label for="edit-today-item-prot">Protein (g)</label>
-            <input type="number" inputmode="decimal" step="0.1" id="edit-today-item-prot" class="form-input" required>
+            <input type="number" inputmode="decimal" step="any" id="edit-today-item-prot" class="form-input" required>
           </div>
           <div class="form-group">
             <label for="edit-today-item-carb">Carbs (g)</label>
-            <input type="number" inputmode="decimal" step="0.1" id="edit-today-item-carb" class="form-input" required>
+            <input type="number" inputmode="decimal" step="any" id="edit-today-item-carb" class="form-input" required>
           </div>
           <div class="form-group">
             <label for="edit-today-item-fat">Fat (g)</label>
-            <input type="number" inputmode="decimal" step="0.1" id="edit-today-item-fat" class="form-input" required>
+            <input type="number" inputmode="decimal" step="any" id="edit-today-item-fat" class="form-input" required>
           </div>
         </div>
       </div>
@@ -1124,7 +1126,9 @@
   document.addEventListener('DOMContentLoaded', () => {
     const dInput = document.getElementById('weight-date-input');
     if (dInput) {
-      dInput.value = new Date().toISOString().split('T')[0];
+      // Local date: toISOString() is UTC, which is still yesterday just after
+      // midnight in summer time.
+      dInput.value = toISODateLocal(new Date());
     }
   });
 </script>

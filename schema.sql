@@ -42,10 +42,12 @@ create table if not exists public.macro_food_database (
 -- Daily logs. 'Items Logged' is a JSON string, not jsonb - the app
 -- JSON.stringify()s on write and JSON.parse()s on read, so keep it text.
 --
--- Three reserved rows share this table with the real days:
+-- Four reserved rows share this table with the real days:
 --   ...000000000001  'ACTIVE_DRAFT'     the current day's meals
 --   ...000000000002  'BUILDER_DRAFT'    the half-built meal
 --   ...000000000003  'CALORIE_CARRIES'  carried surplus/deficit and planned days
+--   ...000000000004  'FOOD_UNITS'       each food's serving type (g, ml, unit...)
+--                                       and exact decimal serving size
 -- The primary key on id is what upsert(..., { onConflict: 'id' }) relies on.
 -- ---------------------------------------------------------------------------
 create table if not exists public.macro_daily_logs (

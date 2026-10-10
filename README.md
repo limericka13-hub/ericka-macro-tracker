@@ -61,7 +61,8 @@ Serves on http://localhost:3000. `server.js` mirrors the two Vercel functions
 
 - `macro_targets` holds exactly one row. Its `id` is `GENERATED ALWAYS`, so the
   app only ever updates it.
-- `macro_daily_logs` also holds three reserved rows: `...0001` the day's draft,
-  `...0002` the half-built meal, `...0003` carried calories and planned days.
+- `macro_daily_logs` also holds four reserved rows: `...0001` the day's draft,
+  `...0002` the half-built meal, `...0003` carried calories and planned days,
+  `...0004` each food's serving type and exact serving size.
 - Supabase's free tier pauses a project after a week with no activity. Daily use
   keeps it awake; if it does pause, resume it from the Supabase dashboard.

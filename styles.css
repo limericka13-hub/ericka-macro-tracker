@@ -20,7 +20,9 @@
   --fat-muted: rgba(192, 132, 252, 0.15);
   --text-main: #f3f4f6;
   --text-muted: #9ca3af;
-  --text-dim: #6b7280;
+  /* The quietest text that still reads: 4.5:1 or better on every surface
+     it sits on (it was #6b7280, about 3.6:1 on the cards). */
+  --text-dim: #868d99;
   --danger: #ef4444;
   --danger-muted: rgba(239, 68, 68, 0.15);
   --success: #10b981;
@@ -102,9 +104,6 @@ body.app-active {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  /* Sideways drags belong to the page swipe in app.js - also on the empty
-     column below a short page, and between two pages still sliding. */
-  touch-action: pan-y;
 }
 
 /* HEADER & NAVIGATION */
@@ -1581,6 +1580,39 @@ body.is-offline.app-active .offline-banner {
   color: var(--text-dim);
 }
 
+/* How far through its target each figure is: a slim bar in the macro's
+   colour, full and red once the target is passed. */
+.stat-progress {
+  height: 5px;
+  margin: 6px 0 3px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+}
+
+.stat-progress-fill {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: currentColor;
+  transition: width 0.35s ease;
+}
+
+.stat-progress.kcal { color: var(--accent); }
+.stat-progress.prot { color: var(--protein); }
+.stat-progress.carb { color: var(--carbs); }
+.stat-progress.fat { color: var(--fat); }
+.stat-progress.over { color: var(--danger); }
+
+.box-kcal .stat-progress {
+  height: 7px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stat-progress-fill { transition: none; }
+}
+
 /* Same green/red convention the weekly REMAINING figure already uses. */
 .val-remaining {
   font-size: 0.72rem;
@@ -1712,13 +1744,6 @@ body.is-offline.app-active .offline-banner {
   font-weight: 700;
 }
 
-.carry-quick {
-  display: flex;
-  gap: 4px;
-  flex-shrink: 0;
-}
-
-.carry-quick-btn,
 .carry-day-chip {
   touch-action: manipulation;
   border: 1px solid var(--border);
@@ -1733,7 +1758,6 @@ body.is-offline.app-active .offline-banner {
   white-space: nowrap;
 }
 
-.carry-quick-btn.active,
 .carry-day-chip.active {
   color: var(--accent);
   border-color: rgba(245, 166, 35, 0.5);
@@ -1880,12 +1904,6 @@ body.is-offline.app-active .offline-banner {
 #carry-submit-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
-}
-
-@media (max-width: 380px) {
-  /* The quick amounts drop under the field rather than squeezing it. */
-  .carry-amount-row { flex-wrap: wrap; }
-  .carry-amount-row .form-input { flex-basis: 100%; }
 }
 
 /* MEAL BUILDER CARD */
@@ -2576,7 +2594,7 @@ body.modal-open {
 .today-food-row {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 3px;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -2597,10 +2615,20 @@ body.modal-open {
   flex-shrink: 0;
 }
 
-.today-food-pills {
-  font-size: 0.68rem;
-  gap: 5px;
+/* A food's macros as one quiet line of coloured figures - four bordered
+   pills per food made a logged meal a wall of boxes. */
+.today-food-macros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  font-size: 0.72rem;
+  font-weight: 600;
 }
+
+.today-food-macros .kcal { color: var(--text-main); font-weight: 700; }
+.today-food-macros .prot { color: var(--protein); }
+.today-food-macros .carb { color: var(--carbs); }
+.today-food-macros .fat { color: var(--fat); }
 
 .today-food-qty {
   font-size: 0.76rem;
@@ -2654,23 +2682,103 @@ body.modal-open {
 
 .view-panel {
   -webkit-overflow-scrolling: touch;
-  /* The browser keeps vertical scrolling; sideways drags are left to the
-     page swipe in app.js. Pinch zoom is already off in the viewport tag. */
-  touch-action: pan-y;
 }
 
-/* While a page is dragged sideways the column also holds the page coming in
-   beside it, laid out over it by app.js. A mouse drag (only - see app.js)
-   neither selects text on the way nor shows a text cursor. */
-.app-container.page-swiping {
-  position: relative;
+/* The sync dialog: the header dot's state, in words. */
+.sync-status-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px;
 }
 
-body.page-dragging,
-body.page-dragging * {
-  -webkit-user-select: none;
+.sync-status-box .sync-circle-dot {
+  margin-top: 5px;
+  flex-shrink: 0;
+}
+
+.sync-status-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.sync-status-text strong {
+  color: var(--text-main);
+  font-size: 0.9rem;
+}
+
+.sync-status-sub {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.sync-advanced {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.sync-advanced summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text-main);
   user-select: none;
-  cursor: grabbing !important;
+}
+
+.sync-advanced-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  word-break: break-all;
+}
+
+/* An amount with its unit written beside it: "1 tbsp", "250 ml". */
+.qty-with-unit {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.qty-with-unit .form-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.qty-unit {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* Targets: what the macros add up to. */
+.targets-check {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--accent);
+}
+
+.targets-check.ok {
+  color: var(--success);
+}
+
+/* `hidden` always wins, whatever display a class gives the element. */
+[hidden] {
+  display: none !important;
 }
 
 #panel-weights .day-header-row {
@@ -3513,6 +3621,180 @@ body.page-dragging * {
   transform: translateY(-1px);
 }
 
+/* Nothing to log yet: clearly not ready, rather than an inviting button that
+   only answers with an error. */
+.log-meal-btn:disabled,
+.log-meal-btn.primary-log-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+/* Filing the day is housekeeping - meals count on their own day either way
+   - so it is a quiet button, not a second orange one beside Log meal. */
+.finish-day-btn {
+  touch-action: manipulation;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 10px 14px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-focus);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-main);
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.finish-day-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Meals left over from an earlier day, above today's own. */
+.unfiled-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(139, 156, 255, 0.35);
+  background: var(--not-today-muted);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.unfiled-notice strong {
+  color: var(--text-main);
+}
+
+.unfiled-file-btn {
+  touch-action: manipulation;
+  flex-shrink: 0;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: var(--not-today);
+  color: #14161a;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 800;
+  padding: 7px 12px;
+  cursor: pointer;
+}
+
+.todays-log-subhead {
+  margin-top: 4px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.todays-log-none {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  padding: 2px 2px 4px;
+}
+
+/* A meal's heading: name and time, the macros under them, kcal on the
+   right - readable with the meal still closed. */
+.meal-head-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+
+.meal-head-line {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  min-width: 0;
+}
+
+.meal-head-line .history-meal-name-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meal-time {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.meal-head-macros {
+  display: flex;
+  gap: 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.meal-head-macros .prot { color: var(--protein); }
+.meal-head-macros .carb { color: var(--carbs); }
+.meal-head-macros .fat { color: var(--fat); }
+
+.meal-head-kcal {
+  font-size: 0.86rem;
+  font-weight: 800;
+  color: var(--accent);
+  white-space: nowrap;
+  padding-left: 6px;
+}
+
+/* Finish the day: what is being filed, at a glance. */
+.modal-intro {
+  margin: 0;
+  font-size: 0.84rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.finish-day-summary {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+}
+
+.finish-day-totals {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.finish-day-totals .kcal { color: var(--accent); font-size: 1rem; font-weight: 800; }
+.finish-day-totals .prot { color: var(--protein); }
+.finish-day-totals .carb { color: var(--carbs); }
+.finish-day-totals .fat { color: var(--fat); }
+
+.finish-day-meals {
+  margin-top: 4px;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+
+.field-hint {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  margin-top: 3px;
+  line-height: 1.4;
+}
+
 /* TODAY'S LOG CARD */
 .todays-log-card {
   background: var(--bg-card);
@@ -4139,6 +4421,34 @@ mark.search-hit {
   gap: 8px;
 }
 
+/* A food's serving: the size beside its type, always on one line. */
+.form-row.serving-row {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+}
+
+.serving-hint {
+  margin: -4px 0 0;
+  font-size: 0.74rem;
+  color: var(--text-muted);
+}
+
+/* The app's one kind of dropdown: drawn like the text fields, with its own
+   chevron in place of the platform's. */
+select.form-input {
+  -webkit-appearance: none;
+  appearance: none;
+  padding-right: 30px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 11px center;
+  cursor: pointer;
+}
+
+select.form-input option {
+  background: var(--bg-card);
+  color: var(--text-main);
+}
+
 /* Protein, carbs and fat always sit on one line. auto-fit would drop one of
    them onto a row of its own the moment the dialog got narrow. */
 .form-row.macro-trio {
@@ -4418,7 +4728,8 @@ mark.search-hit {
   border-radius: var(--radius-pill);
 }
 
-/* Anything other than the usual 100g changes what the numbers mean. */
+/* Anything other than the usual 100g - another amount, or another serving
+   type - changes what the numbers mean. */
 .food-db-basis.custom-basis {
   color: var(--success);
   background: var(--success-muted);

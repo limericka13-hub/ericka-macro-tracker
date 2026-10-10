@@ -10,7 +10,10 @@
  * Open Food Facts / USDA once the names come back.
  */
 
-const MODEL = 'gemini-2.5-flash';
+// Flash-Lite: fast and cheap, and picking food names out of a sentence needs
+// nothing bigger. gemini-2.5-flash is only served to keys that used it before,
+// so any new key got a 404 and voice fell back to plain parsing.
+const MODEL = 'gemini-3.5-flash-lite';
 const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 const TIMEOUT_MS = 15000;
 const MAX_TRANSCRIPT = 500;
