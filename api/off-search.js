@@ -12,7 +12,7 @@
 
 const SEARCH_URL = 'https://search.openfoodfacts.org/search';
 const FIELDS = 'code,product_name,brands,nutriments,image_front_small_url,serving_size,quantity';
-const USER_AGENT = 'MacroTracker/1.0 (personal macro tracker; https://github.com/pontes-ss)';
+const USER_AGENT = 'ErickaMacroTracker/1.0 (personal macro tracker; https://github.com/limericka13-hub/ericka-macro-tracker)';
 const PAGE_SIZE = 25;
 const TIMEOUT_MS = 6000;
 

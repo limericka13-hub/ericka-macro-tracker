@@ -30,6 +30,8 @@ import { fileURLToPath } from 'url';
 
 const CACHE_PREFIX = 'ericka-';
 const PACKAGE_NAME = 'ericka-macro-tracker';
+// Open Food Facts asks callers to identify themselves with a name and contact.
+const USER_AGENT = 'ErickaMacroTracker/1.0 (personal macro tracker; https://github.com/limericka13-hub/ericka-macro-tracker)';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = path.resolve(ROOT, process.argv[2] || '../../Macro Tracker Project/macro tracker project');
@@ -187,6 +189,11 @@ for (const d of DIRS) {
   const here = path.join(ROOT, d);
   if (fs.existsSync(here)) for (const f of fs.readdirSync(here)) if (!names.includes(f)) removals.push(`${d}/${f}`);
 }
+
+// The food search names this instance to Open Food Facts, not the original.
+out.set('api/off-search.js', patch('api/off-search.js', out.get('api/off-search.js').toString('utf8'), [
+  ['USER_AGENT', /const USER_AGENT = '[^']*';/, () => `const USER_AGENT = '${USER_AGENT}';`]
+]));
 
 // ---- last check, then write --------------------------------------------------
 for (const [f, content] of out) {
