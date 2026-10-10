@@ -30,6 +30,13 @@ const CARRY_FLOOR_KCAL = 1200;
 // here exactly, whatever the food table's Quantity column can hold.
 const FOOD_UNITS_UUID = '00000000-0000-0000-0000-000000000004';
 
+// Retail barcodes - the only kind printed on food.
+const BARCODE_FORMATS = ['ean_13', 'ean_8', 'upc_a', 'upc_e'];
+// Stands in for the browser's own BarcodeDetector where there is none (Safari
+// on iPhone, desktop Windows): the same API, decoded by ZXing compiled to
+// WebAssembly. Pinned, and loaded on the first scan only.
+const BARCODE_LIBRARY_URL = 'https://cdn.jsdelivr.net/npm/barcode-detector@3.2.2/dist/iife/ponyfill.js';
+
 // The serving types a food can be measured in. A food's macros are quoted per
 // `Quantity` of its unit, and every amount logged against it is in that unit
 // too - so the arithmetic is the same for all of them, only the names change.
@@ -5390,12 +5397,64 @@ class MacroApp {
   }
 
   // ---------- Barcode scanning ----------
-  // Uses the browser's native BarcodeDetector (Chrome on Android). No library,
-  // no API key. Lookups hit Open Food Facts, which is free and unauthenticated.
+  // Uses the browser's own BarcodeDetector where it has one (Chrome on
+  // Android), and the barcode-detector library everywhere else - the same API,
+  // so nothing past loadBarcodeDetector() knows which it got. No API key.
+  // Lookups hit Open Food Facts, which is free and unauthenticated.
 
   isBarcodeScanSupported() {
-    return 'BarcodeDetector' in window &&
-      !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+    return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  }
+
+  // Resolves to { Detector, formats }. A native detector only counts if it
+  // reads at least one retail format; otherwise the library steps in.
+  loadBarcodeDetector() {
+    if (!this.barcodeDetectorPromise) {
+      this.barcodeDetectorPromise = (async () => {
+        if ('BarcodeDetector' in window) {
+          const formats = await this.getSupportedBarcodeFormats(window.BarcodeDetector);
+          if (formats) return { Detector: window.BarcodeDetector, formats };
+        }
+        const api = await this.loadBarcodeLibrary();
+        return { Detector: api.BarcodeDetector, formats: BARCODE_FORMATS };
+      })();
+      // A failed load - offline on the very first scan - must not stick.
+      this.barcodeDetectorPromise.catch(() => { this.barcodeDetectorPromise = null; });
+    }
+    return this.barcodeDetectorPromise;
+  }
+
+  // Loads the library and its WebAssembly decoder (about 1 MB) up front, so
+  // a slow first download reads as "Loading" rather than as a scanner that
+  // never finds anything. The decoder is fetched from cdn.jsdelivr.net, not
+  // the library's default mirror, because that is the host sw.js caches -
+  // after one scan it works offline too.
+  async loadBarcodeLibrary() {
+    if (!window.BarcodeDetectionAPI) {
+      await new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = BARCODE_LIBRARY_URL;
+        s.onload = resolve;
+        s.onerror = () => { s.remove(); reject(new Error('barcode library did not load')); };
+        document.head.appendChild(s);
+      });
+    }
+    const api = window.BarcodeDetectionAPI;
+    if (!api || !api.BarcodeDetector) throw new Error('barcode library loaded without BarcodeDetector');
+    await api.prepareZXingModule({
+      overrides: {
+        locateFile: (file, prefix) => file.endsWith('.wasm')
+          ? `https://cdn.jsdelivr.net/npm/zxing-wasm@${api.ZXING_WASM_VERSION}/dist/reader/${file}`
+          : prefix + file
+      },
+      fireImmediately: true
+    });
+    return api;
+  }
+
+  isScannerOpen() {
+    const m = document.getElementById('barcode-scanner-modal');
+    return !!(m && m.classList.contains('active'));
   }
 
   // GS1 mod-10 check digit. A misread that flips a digit almost always fails
@@ -5417,14 +5476,13 @@ class MacroApp {
     return (10 - (sum % 10)) % 10 === check;
   }
 
-  async getSupportedBarcodeFormats() {
-    const wanted = ['ean_13', 'ean_8', 'upc_a', 'upc_e'];
+  async getSupportedBarcodeFormats(Detector) {
     try {
-      const supported = await window.BarcodeDetector.getSupportedFormats();
-      const usable = wanted.filter(f => supported.includes(f));
+      const supported = await Detector.getSupportedFormats();
+      const usable = BARCODE_FORMATS.filter(f => supported.includes(f));
       return usable.length > 0 ? usable : null;
     } catch (e) {
-      return wanted;
+      return BARCODE_FORMATS;
     }
   }
 
@@ -5446,19 +5504,36 @@ class MacroApp {
     this.openModal('barcode-scanner-modal');
 
     if (!this.isBarcodeScanSupported()) {
-      if (statusEl) statusEl.textContent = 'Live scanning needs Chrome on Android. Type the digits below instead.';
+      if (statusEl) statusEl.textContent = 'No camera available here. Type the digits below instead.';
       this.markViewfinder('no-camera', true);
       return;
     }
+
+    let reader;
+    try {
+      if (statusEl) statusEl.textContent = 'Loading the barcode reader...';
+      reader = await this.loadBarcodeDetector();
+    } catch (e) {
+      console.warn('Barcode reader failed to load:', e);
+      if (statusEl) statusEl.textContent = 'Could not load the barcode reader. Check the connection, or type the digits below.';
+      this.markViewfinder('no-camera', true);
+      return;
+    }
+    // The first load can take a few seconds; the dialog may be gone by now.
+    if (!this.isScannerOpen()) return;
     if (statusEl) statusEl.textContent = 'Starting camera...';
 
     try {
-      const formats = await this.getSupportedBarcodeFormats();
-      this.barcodeDetector = formats
-        ? new window.BarcodeDetector({ formats })
-        : new window.BarcodeDetector();
+      this.barcodeDetector = new reader.Detector({ formats: reader.formats });
 
       await this.startCameraStream(this.getPreferredCameraId());
+      // Closed while the camera was starting: stopBarcodeCamera() ran before
+      // the stream existed, so stop it here or it stays on behind a closed
+      // dialog.
+      if (!this.isScannerOpen()) {
+        this.stopBarcodeCamera();
+        return;
+      }
 
       if (statusEl) statusEl.textContent = 'Line the barcode up inside the box';
       this.scanActive = true;

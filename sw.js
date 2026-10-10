@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ericka-macro-ledger-v55';
+const CACHE_NAME = 'ericka-macro-ledger-v56';
 
 // The app's own files. Fetched network-first so a deploy is picked up straight
 // away, with the cache as the offline fallback.
