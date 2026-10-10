@@ -1,0 +1,4597 @@
+:root {
+  --bg: #08090c;
+  --bg-card: #121419;
+  --bg-card-subtle: #171a21;
+  --bg-input: #1a1d25;
+  --bg-input-focus: #212630;
+  /* Hairlines rather than drawn lines: a translucent white edge reads as
+     the lip of a raised surface, where a solid grey reads as a box. */
+  --border: rgba(255, 255, 255, 0.07);
+  --border-focus: rgba(255, 255, 255, 0.18);
+  --accent: #f5a623;
+  --accent-hover: #e09618;
+  --accent-glow: rgba(245, 166, 35, 0.22);
+  --accent-muted: rgba(245, 166, 35, 0.12);
+  --protein: #f97316;
+  --protein-muted: rgba(249, 115, 22, 0.15);
+  --carbs: #06b6d4;
+  --carbs-muted: rgba(6, 182, 212, 0.15);
+  --fat: #c084fc;
+  --fat-muted: rgba(192, 132, 252, 0.15);
+  --text-main: #f3f4f6;
+  --text-muted: #9ca3af;
+  --text-dim: #6b7280;
+  --danger: #ef4444;
+  --danger-muted: rgba(239, 68, 68, 0.15);
+  --success: #10b981;
+  --success-muted: rgba(16, 185, 129, 0.15);
+  /* Any day but today. Amber means today, so looking at another day gets a
+     colour of its own: the strip's selected circle and the banner on the
+     summary card. */
+  --not-today: #8b9cff;
+  --not-today-muted: rgba(139, 156, 255, 0.13);
+  --radius-xl: 20px;
+  --radius-lg: 14px;
+  --radius-md: 10px;
+  --radius-sm: 8px;
+  --radius-pill: 9999px;
+  /* Cards sit on the page rather than being outlined on it. */
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.45), 0 10px 28px -16px rgba(0, 0, 0, 0.9);
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  /* Figures used to be set in JetBrains Mono, which read as a terminal
+     readout. Inter with tabular numerals keeps every digit the same width
+     - so columns still line up - without the monospace look. */
+  --font-mono: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-sans);
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--text-main);
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 12px;
+  padding-top: calc(8px + env(safe-area-inset-top, 0px));
+  padding-left: calc(12px + env(safe-area-inset-left, 0px));
+  padding-right: calc(12px + env(safe-area-inset-right, 0px));
+  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  justify-content: center;
+  color-scheme: dark;
+  line-height: 1.45;
+  overflow-x: hidden;
+  /* Every figure in the app is a number in a column of numbers. */
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Extra bottom clearance for the fixed mobile nav bar - only needed once
+   logged in, since the nav bar isn't rendered on the login screen. Keeping
+   the login screen's padding symmetric is what actually centers it. */
+body.app-active {
+  padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px));
+}
+
+/* No bottom nav bar from here up, so no clearance to leave for it. */
+@media (min-width: 680px) {
+  body.app-active {
+    padding-bottom: 32px;
+  }
+}
+
+@media (min-width: 768px) {
+  body {
+    padding: 16px 24px 32px 24px;
+  }
+}
+
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+.app-container {
+  width: 100%;
+  max-width: 820px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  /* Sideways drags belong to the page swipe in app.js - also on the empty
+     column below a short page, and between two pages still sliding. */
+  touch-action: pan-y;
+}
+
+/* HEADER & NAVIGATION */
+header.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  /* About 15% shorter than it was: 30px controls over a 7px gap, down from
+     36px over 8px. */
+  padding: 0 0 7px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.brand-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brand-icon-box {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-md);
+  background: #000;
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.brand-icon-box img {
+  width: 17px;
+  height: 17px;
+}
+
+.brand-title {
+  font-size: 1.06rem;
+  font-weight: 800;
+  color: var(--text-main);
+  letter-spacing: -0.4px;
+  /* A fifth nav tab squeezes the header enough to break the name over two
+     lines on a mid-width desktop. */
+  white-space: nowrap;
+}
+
+.brand-wrap {
+  flex-shrink: 0;
+}
+
+.nav-tabs-desktop {
+  display: none;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 2px;
+  gap: 3px;
+  /* Five tabs no longer fit beside the wordmark and the header actions on a
+     narrow laptop. Let the strip scroll inside its own pill rather than
+     shoving the account buttons off the edge of the page. */
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.nav-tabs-desktop::-webkit-scrollbar {
+  display: none;
+}
+
+@media (min-width: 680px) {
+  .nav-tabs-desktop {
+    display: flex;
+  }
+}
+
+.nav-tab-btn {
+  touch-action: manipulation;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  height: 24px;
+  padding: 0 12px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.nav-tab-btn:hover {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.nav-tab-btn.active {
+  background: var(--accent);
+  color: #14161a;
+  font-weight: 700;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* Between the desktop-nav breakpoint and roughly a laptop width, five tabs,
+   the wordmark and the account buttons want about 60px more than the header
+   has. The wordmark is the one piece that is pure decoration here - the brand
+   icon stays, and the name is still on the tab title and the sign-in screen. */
+@media (min-width: 680px) and (max-width: 860px) {
+  .brand-title {
+    display: none;
+  }
+}
+
+.header-menu-wrap {
+  position: relative;
+}
+
+/* OFFLINE BANNER */
+.offline-banner {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 9px 13px;
+  border-radius: var(--radius-lg);
+  background: rgba(245, 166, 35, 0.12);
+  border: 1px solid rgba(245, 166, 35, 0.3);
+  color: var(--accent);
+  font-size: 0.76rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.offline-banner svg {
+  flex-shrink: 0;
+}
+
+body.is-offline.app-active .offline-banner {
+  display: flex;
+}
+
+/* EXPORT DIALOG */
+.export-counts {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 9px 12px;
+}
+
+.export-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.export-option {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  text-align: left;
+  padding: 11px 13px;
+  background: var(--bg-card-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+  touch-action: manipulation;
+}
+
+.export-option:hover {
+  border-color: var(--border-focus);
+  background: var(--bg-input);
+}
+
+.export-option.primary {
+  border-color: rgba(245, 166, 35, 0.35);
+  background: var(--accent-muted);
+}
+
+.export-option-title {
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.export-option.primary .export-option-title {
+  color: var(--accent);
+}
+
+.export-option-desc {
+  font-size: 0.74rem;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+
+.header-menu-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 194px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-focus);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.75);
+  padding: 5px;
+  display: none;
+  z-index: 200;
+}
+
+.header-menu-dropdown.open {
+  display: block;
+}
+
+.header-menu-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-align: left;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.header-menu-item svg {
+  flex-shrink: 0;
+}
+
+.header-menu-item:hover {
+  background: var(--bg-input);
+  color: var(--text-main);
+}
+
+.header-menu-item.danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--danger);
+}
+
+.sync-circle-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.15s;
+}
+
+.sync-circle-btn:hover {
+  border-color: var(--text-dim);
+  background: var(--bg-input);
+}
+
+.sync-circle-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  transition: background 0.3s;
+}
+
+.sync-circle-btn.synced .sync-circle-dot {
+  background: var(--success);
+  box-shadow: 0 0 6px var(--success);
+}
+
+.sync-circle-btn.syncing .sync-circle-dot {
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent);
+  animation: pulse 1s infinite alternate;
+}
+
+.sync-circle-btn.error .sync-circle-dot {
+  background: var(--danger);
+  box-shadow: 0 0 6px var(--danger);
+}
+
+.icon-btn {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-pill);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.icon-btn:hover {
+  color: var(--text-main);
+  background: var(--bg-input);
+  border-color: var(--border-focus);
+}
+
+/* Matches the header's 30px controls; dialogs keep the larger close button. */
+.header-actions .icon-btn {
+  width: 30px;
+  height: 30px;
+}
+
+/* Mobile Bottom Navigation */
+.mobile-nav-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: calc(48px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  /* Opaque, not translucent. A backdrop blur on a fixed bar forces the whole
+     page behind it to re-composite on every scroll frame, which is what made
+     moving around the app feel stuck on a phone. */
+  background: #0f1115;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  z-index: 100;
+}
+
+@media (min-width: 680px) {
+  .mobile-nav-bar {
+    display: none;
+  }
+}
+
+.mobile-nav-item {
+  /* Tells the browser this is a plain tap target, so it stops waiting to
+     see whether the tap was the start of a double-tap zoom. */
+  touch-action: manipulation;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  font-size: 0.64rem;
+  font-weight: 600;
+  cursor: pointer;
+  flex: 1;
+  height: 100%;
+}
+
+.mobile-nav-item svg {
+  width: 16px;
+  height: 16px;
+}
+
+.mobile-nav-item.active {
+  color: var(--accent);
+}
+
+/* A marker on the bar itself, so the current tab is readable without
+   having to compare icon colours. */
+.mobile-nav-item.active::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 28px;
+  height: 3px;
+  border-radius: 0 0 3px 3px;
+  background: var(--accent);
+}
+
+/* WEEK STRIP
+   The date picker at the top of the Tracker. Seven days, one selected; the
+   chevron folds out a bar chart laid out on the same seven columns. */
+.week-strip-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
+  padding: 8px 8px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  /* Clips the days while a swipe slides them out of the card, and holds
+     the week coming in beside them, laid over them by app.js. */
+  overflow: hidden;
+  position: relative;
+  /* Sideways drags anywhere on the card belong to the week swipe - also a
+     finger landing beside the days while they are still sliding. */
+  touch-action: pan-y;
+}
+
+.week-strip-head {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 4px;
+}
+
+.week-strip-center {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.week-strip-icon-btn {
+  touch-action: manipulation;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+
+.week-strip-icon-btn:hover {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.week-strip-search-btn {
+  justify-self: end;
+}
+
+/* Only there when you are looking at some other day. Kept in the layout
+   while hidden so the month name does not shift when it appears. */
+.week-strip-today-btn {
+  touch-action: manipulation;
+  justify-self: start;
+  visibility: hidden;
+  border: none;
+  border-radius: var(--radius-pill);
+  padding: 4px 11px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--accent-muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.week-strip-today-btn.visible {
+  visibility: visible;
+}
+
+.week-strip-today-btn:hover {
+  background: var(--accent);
+  color: #14161a;
+}
+
+.week-strip-month-wrap {
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+
+.week-strip-month {
+  touch-action: manipulation;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: transparent;
+  color: var(--text-main);
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 6px 8px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.week-strip-month svg {
+  color: var(--text-dim);
+}
+
+.week-strip-month:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* The native date picker, opened from the month name. Invisible but still
+   rendered, which is what lets browsers without showPicker() open it. */
+.week-strip-date-input {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.week-strip-search {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 2px 8px;
+}
+
+.week-strip-search .history-search-wrap {
+  flex: 1;
+  min-width: 0;
+}
+
+.week-strip-search-done {
+  touch-action: manipulation;
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font-size: 0.84rem;
+  font-weight: 700;
+  padding: 8px 6px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.week-strip-card.searching .week-strip-search {
+  display: flex;
+}
+
+.week-strip-card.searching .week-strip-head,
+.week-strip-card.searching .week-strip-body,
+.week-strip-card.searching .week-strip-toggle {
+  display: none;
+}
+
+.week-strip-body {
+  /* Vertical drags stay with the page; sideways ones change week. */
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* A mouse drag in progress, so the pointer says the strip is being held. */
+.week-strip-body.dragging,
+.week-strip-body.dragging * {
+  cursor: grabbing;
+}
+
+.week-strip-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.week-day {
+  touch-action: manipulation;
+  border: none;
+  background: transparent;
+  color: var(--text-main);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 4px 0 2px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.week-day-name {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.week-day-num {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.02rem;
+  font-weight: 700;
+  transition: background 0.15s, color 0.15s;
+}
+
+.week-day:hover .week-day-num {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.week-day:focus-visible {
+  outline: none;
+}
+
+.week-day:focus-visible .week-day-num {
+  box-shadow: 0 0 0 2px var(--accent-glow);
+}
+
+.week-day.future .week-day-num {
+  color: var(--text-dim);
+}
+
+/* Today is white: a solid white circle while it is the day on show, a white
+   ring once another day is picked, and its name in white either way. */
+.week-day.today .week-day-name {
+  color: #fff;
+  font-weight: 800;
+}
+
+.week-day.today .week-day-num {
+  color: #fff;
+}
+
+.week-day.today:not(.selected) .week-day-num {
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.85);
+}
+
+.week-day.selected .week-day-num {
+  background: #fff;
+  color: #14161a;
+  font-weight: 800;
+}
+
+.week-day.selected:not(.today) .week-day-num {
+  background: var(--not-today);
+}
+
+/* A line from a day that carried calories to the days that took them: a dot
+   where it came from, a smaller one on each day that took a share and the
+   arrow on the last. Green for a day that came in under, red for one over.
+   A planned high or low day is amber, with its triangle on the day and a dot
+   on each day that balances it. */
+.week-strip-carries {
+  position: relative;
+  margin: 3px 0 2px;
+}
+
+.week-strip-carries:empty {
+  display: none;
+}
+
+.week-carry {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 10px;
+}
+
+.week-carry.under { color: var(--success); }
+.week-carry.over { color: var(--danger); }
+.week-carry.plan { color: var(--accent); }
+
+.week-carry-line,
+.week-carry-from,
+.week-carry-mark,
+.week-carry-head,
+.week-carry-plan {
+  position: absolute;
+  top: 50%;
+}
+
+.week-carry-line {
+  height: 2px;
+  margin-top: -1px;
+  border-radius: 1px;
+  background: currentColor;
+  opacity: 0.75;
+}
+
+/* Carried in from a day in another week: the line fades in from the edge. */
+.week-carry.from-away .week-carry-line {
+  background: linear-gradient(90deg, transparent, currentColor 36px);
+}
+
+.week-carry-from,
+.week-carry-mark {
+  border-radius: 50%;
+  background: currentColor;
+  transform: translate(-50%, -50%);
+}
+
+.week-carry-from { width: 8px; height: 8px; }
+.week-carry-mark { width: 5px; height: 5px; }
+
+/* A triangle with its tip just past the last day's centre. */
+.week-carry-head {
+  width: 0;
+  height: 0;
+  border-top: 4.5px solid transparent;
+  border-bottom: 4.5px solid transparent;
+  border-left: 8px solid currentColor;
+  transform: translate(-5px, -50%);
+}
+
+.week-carry.back .week-carry-head {
+  transform: translate(-3px, -50%) rotate(180deg);
+}
+
+/* Up for a high day, down for a low one. */
+.week-carry-plan {
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  transform: translate(-50%, -50%);
+}
+
+.week-carry-plan.high { border-bottom: 8px solid currentColor; }
+.week-carry-plan.low { border-top: 8px solid currentColor; }
+
+/* Animating grid rows from 0fr to 1fr opens the chart to its real height
+   without measuring it in script. */
+.week-strip-chart-wrap {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.25s ease;
+}
+
+.week-strip-card.bars-open .week-strip-chart-wrap {
+  grid-template-rows: 1fr;
+}
+
+.week-strip-chart-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.week-strip-chart {
+  /* Room above the tallest bar for its kcal figure. */
+  padding-top: 18px;
+  margin-top: 4px;
+}
+
+.week-strip-plot {
+  position: relative;
+  height: 96px;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  border-bottom: 1px solid var(--border);
+}
+
+.week-chart-target {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1.5px dashed #4b5563;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.week-chart-col {
+  position: relative;
+  touch-action: manipulation;
+  height: 100%;
+  border: none;
+  background: transparent;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  border-radius: 8px 8px 0 0;
+  cursor: pointer;
+}
+
+.week-chart-col.selected {
+  background: var(--accent-muted);
+}
+
+/* A day's own target once carries have moved it: green above the usual
+   target, amber below it. */
+.week-chart-col-target {
+  position: absolute;
+  left: 14%;
+  right: 14%;
+  border-top: 1.5px dashed #4b5563;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.week-chart-col-target.up { border-top-color: rgba(16, 185, 129, 0.85); }
+.week-chart-col-target.down { border-top-color: rgba(245, 166, 35, 0.85); }
+
+.week-chart-bar {
+  position: relative;
+  width: 18px;
+  max-width: 50%;
+  display: flex;
+  flex-direction: column;
+  transition: height 0.25s ease;
+}
+
+.week-chart-stack {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  border-radius: 5px 5px 2px 2px;
+  overflow: hidden;
+}
+
+.week-chart-seg { min-height: 0; }
+.week-chart-seg.protein { background: var(--protein); }
+.week-chart-seg.carbs { background: var(--carbs); }
+.week-chart-seg.fat { background: var(--fat); }
+
+.week-chart-kcal {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 3px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.week-chart-col.today .week-chart-kcal,
+.week-chart-col.selected .week-chart-kcal {
+  color: var(--text-main);
+}
+
+.week-strip-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.week-strip-stat {
+  background: var(--bg-card-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-width: 0;
+}
+
+.week-strip-stat-lbl {
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-dim);
+}
+
+.week-strip-stat-val {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-main);
+  white-space: nowrap;
+}
+
+.week-strip-stat-val.highlight { color: #22c55e; }
+.week-strip-stat-val.negative { color: #ef4444; }
+
+.week-strip-chart-inner .weekly-legend-row {
+  margin-top: 8px;
+  padding-top: 6px;
+  gap: 12px;
+  font-size: 0.66rem;
+}
+
+.week-strip-toggle {
+  touch-action: manipulation;
+  width: 100%;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.week-strip-toggle:hover {
+  color: var(--text-main);
+}
+
+.week-strip-toggle svg {
+  transition: transform 0.25s ease;
+}
+
+.week-strip-card.bars-open .week-strip-toggle svg {
+  transform: rotate(180deg);
+}
+
+@media (max-width: 360px) {
+  .week-day-num {
+    width: 32px;
+    height: 32px;
+    font-size: 0.95rem;
+  }
+  .week-strip-stat-val {
+    font-size: 0.72rem;
+  }
+}
+
+/* What the Tracker shows under the strip. A past day has no Meal Builder
+   or Today's Log - only what was archived for it - except while one of its
+   meals is being edited, when the builder appears for that edit. */
+#panel-dashboard.past-day:not(.editing-meal) .meal-builder-card,
+#panel-dashboard.past-day .todays-log-card:not(.day-log-card) {
+  display: none;
+}
+
+/* EDITING A LOGGED MEAL */
+.meal-edit-banner {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  background: var(--accent-muted);
+  border: 1px solid rgba(245, 166, 35, 0.35);
+}
+
+#panel-dashboard.editing-meal .meal-edit-banner {
+  display: flex;
+}
+
+.meal-edit-banner-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.meal-edit-banner-lbl {
+  font-size: 0.64rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--accent);
+}
+
+/* Reads as the meal's title, and is the place to rename it. */
+.meal-edit-name-input {
+  width: 100%;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  border-bottom: 1px dashed rgba(245, 166, 35, 0.4);
+  color: var(--text-main);
+  font-size: 0.9rem;
+  font-weight: 700;
+  padding: 1px 0 2px;
+  outline: none;
+}
+
+.meal-edit-name-input:focus {
+  border-bottom-style: solid;
+  border-bottom-color: var(--accent);
+}
+
+.meal-edit-cancel-btn {
+  touch-action: manipulation;
+  flex-shrink: 0;
+  border: 1px solid var(--border-focus);
+  background: var(--bg-input);
+  color: var(--text-main);
+  font-size: 0.76rem;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+
+.meal-edit-cancel-btn:hover {
+  background: var(--bg-input-focus);
+}
+
+/* The logged meal that is open in the builder. */
+.today-meal-group.being-edited {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-muted);
+}
+
+/* ⋮ MENUS
+   One floating menu, shared by meals, foods and Add Food. It borrows the
+   header menu's items so every menu in the app looks the same. */
+.action-menu {
+  position: fixed;
+  z-index: 300;
+  min-width: 190px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-focus);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.75);
+  padding: 5px;
+}
+
+/* Red from the start: a phone has no hover to warn before the tap. */
+.action-menu .header-menu-item.danger {
+  color: rgba(239, 68, 68, 0.85);
+}
+
+.action-menu .header-menu-item.active {
+  color: var(--text-main);
+}
+
+.action-menu .header-menu-item.active svg {
+  color: var(--accent);
+}
+
+/* Holds an icon's place on the entries of a pick-one menu, such as the
+   Food List's sort, where only the one in use carries a tick. */
+.menu-icon-spacer {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+
+.today-meal-head-actions .menu-trigger {
+  width: 28px;
+  height: 28px;
+}
+
+.today-meal-head-actions .menu-trigger[aria-expanded="true"] {
+  background: var(--bg-input);
+  color: var(--text-main);
+}
+
+/* Searching swaps the whole day view for the list of matching days. */
+#panel-dashboard.searching > :not(#week-strip-card):not(#history-search-results) {
+  display: none;
+}
+
+.history-search-results {
+  display: none;
+  flex-direction: column;
+  gap: 10px;
+}
+
+#panel-dashboard.searching .history-search-results {
+  display: flex;
+}
+
+/* Empty on most days, and an empty flex item would still take a gap. */
+.day-logs-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.day-logs-section:empty {
+  display: none;
+}
+
+.day-log-card .history-card-body {
+  display: flex;
+  padding: 0;
+  border-top: none;
+}
+
+.day-log-time {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.weekly-legend-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  padding-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.legend-dot.protein { background: var(--protein); }
+.legend-dot.carbs { background: var(--carbs); }
+.legend-dot.fat { background: var(--fat); }
+
+.legend-line {
+  width: 14px;
+  border-top: 1.5px dashed #4b5563;
+}
+
+/* AUTHENTICATION / LOGIN SCREEN */
+.login-screen-container {
+  /* No min-height here: body is already min-height:100vh with its own
+     padding, and this container is body's flex item - stretching to fill
+     that (the flex default) is what actually fits the viewport. Adding
+     another 100vh here stacked the two and pushed the card off-screen. */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  align-self: stretch;
+  padding: max(20px, env(safe-area-inset-top, 0px)) max(20px, env(safe-area-inset-right, 0px)) max(20px, env(safe-area-inset-bottom, 0px)) max(20px, env(safe-area-inset-left, 0px));
+  background: radial-gradient(circle at 50% 20%, rgba(245, 166, 35, 0.08) 0%, rgba(9, 10, 12, 1) 70%);
+}
+
+.login-screen-container.hidden {
+  display: none !important;
+}
+
+.app-container.hidden {
+  display: none !important;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 440px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-focus);
+  border-radius: var(--radius-xl);
+  padding: 32px 28px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.75);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.login-brand-header {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.login-brand-icon {
+  width: 58px;
+  height: 58px;
+  border-radius: var(--radius-lg);
+  background: rgba(245, 166, 35, 0.12);
+  border: 1px solid rgba(245, 166, 35, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+
+.login-brand-title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--text-main);
+  letter-spacing: -0.5px;
+}
+
+.login-brand-subtitle {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+  margin: 0;
+}
+
+.login-status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 6px 14px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  align-self: center;
+}
+
+.auth-error-alert {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #fca5a5;
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.login-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.login-submit-btn {
+  width: 100%;
+  padding: 12px 18px;
+  font-size: 0.92rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.login-guest-btn {
+  width: 100%;
+  padding: 10px 14px;
+  font-size: 0.82rem;
+  text-align: center;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+
+.login-guest-btn:hover {
+  color: var(--text-main);
+  border-color: var(--border-focus);
+  background: var(--bg-input);
+}
+
+.login-footer-info {
+  text-align: center;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+}
+
+.account-logout-btn {
+  color: var(--text-dim);
+}
+
+.account-logout-btn:hover {
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+/* DAILY SUMMARY CARD & STATS */
+.daily-summary-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.day-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.date-title-group {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.day-name-heading {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--text-main);
+  letter-spacing: -0.3px;
+}
+
+.day-date-sub {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  letter-spacing: 0.1px;
+}
+
+/* A DAY THAT IS NOT TODAY
+   The summary card's header becomes a tinted banner across the top of the
+   card: how long ago the day was, its full date, and the way back. */
+.day-away-icon,
+.day-away-kicker,
+.day-back-today-btn {
+  display: none;
+}
+
+.day-title-stack {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+#day-summary-card.not-today {
+  border-color: rgba(139, 156, 255, 0.4);
+}
+
+#day-summary-card.not-today .day-header-row {
+  margin: -12px -12px 0;
+  padding: 8px 10px 8px 12px;
+  gap: 10px;
+  background: var(--not-today-muted);
+  border-bottom: 1px solid rgba(139, 156, 255, 0.22);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+}
+
+#day-summary-card.not-today .date-title-group {
+  align-items: center;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+#day-summary-card.not-today .day-away-icon {
+  display: block;
+  flex-shrink: 0;
+  color: var(--not-today);
+}
+
+#day-summary-card.not-today .day-away-kicker {
+  display: block;
+  font-size: 0.64rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--not-today);
+}
+
+#day-summary-card.not-today .day-date-sub {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--text-main);
+  letter-spacing: -0.2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Amber, like today itself on the strip. */
+#day-summary-card.not-today .day-back-today-btn {
+  display: block;
+  touch-action: manipulation;
+  flex-shrink: 0;
+  border: none;
+  border-radius: var(--radius-pill);
+  padding: 6px 12px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: #14161a;
+  background: var(--accent);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+#day-summary-card.not-today .day-back-today-btn:hover {
+  background: var(--accent-hover);
+}
+
+/* Six tracks so calories can take the full width above the three macros,
+   which is the hierarchy every macro app settles on: one number you check
+   at a glance, three you check second. */
+.daily-subtotal-stats {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+}
+
+.box-kcal { grid-column: span 6; }
+.box-prot, .box-carb, .box-fat { grid-column: span 2; }
+
+.subtotal-stat-box {
+  /* Lighter than the card it sits on, not darker - a raised tile rather
+     than a hole punched in the surface. */
+  background: var(--bg-card-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.box-kcal {
+  /* The one tile carrying the day’s headline number gets a warm wash so
+     the eye lands on it first. */
+  background:
+    linear-gradient(180deg, rgba(245, 166, 35, 0.09), rgba(245, 166, 35, 0.02)),
+    var(--bg-card-subtle);
+  border-color: rgba(245, 166, 35, 0.2);
+  padding: 10px 14px;
+}
+
+.box-kcal .val-main {
+  font-size: 2.2rem;
+  letter-spacing: -1.6px;
+}
+
+.box-kcal .val-sub {
+  font-size: 0.86rem;
+}
+
+.stat-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Was an outlined pill per macro. Four of them stacked in a row is a lot
+   of chrome around four short words - colour alone carries the coding. */
+.lbl-badge {
+  font-size: 0.64rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.9px;
+  display: inline-flex;
+}
+
+.lbl-badge.kcal { color: var(--accent); }
+.lbl-badge.prot { color: var(--protein); }
+.lbl-badge.carb { color: var(--carbs); }
+.lbl-badge.fat { color: var(--fat); }
+
+.stat-value-group {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.val-main {
+  font-size: 1.45rem;
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.6px;
+}
+
+.val-sub {
+  font-size: 0.76rem;
+  font-weight: 500;
+  color: var(--text-dim);
+}
+
+/* Same green/red convention the weekly REMAINING figure already uses. */
+.val-remaining {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--success);
+  white-space: nowrap;
+}
+
+.val-remaining.over {
+  color: var(--danger);
+}
+
+.box-kcal .val-remaining {
+  font-size: 0.85rem;
+}
+
+/* CALORIE CARRIES
+   The Calories tile's quiet button: Carry a finished day's balance, or Plan
+   a day still to come. It lights up once the day has one. */
+.day-carry-btn {
+  touch-action: manipulation;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-focus);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.day-carry-btn:hover {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.day-carry-btn.is-set {
+  color: var(--accent);
+  border-color: rgba(245, 166, 35, 0.4);
+  background: var(--accent-muted);
+}
+
+.day-carry-btn[hidden],
+.day-target-note[hidden],
+.carry-body [hidden],
+.carry-remove-btn[hidden] {
+  display: none;
+}
+
+/* The target, then why carries moved it, in brackets: "/ 2,554 kcal (454 of
+   this carried from Mon 28)". Beside the target while there is room; on the
+   line under it - still beside the number - when there is not. */
+.kcal-target-line {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.kcal-target-line .val-sub {
+  margin-right: 4px;
+  white-space: nowrap;
+}
+
+.day-target-note {
+  display: inline-block;
+  text-wrap: balance;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.carry-body {
+  gap: 14px;
+}
+
+.carry-seg {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 2px;
+  padding: 3px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+}
+
+.carry-seg-btn {
+  touch-action: manipulation;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 7px 10px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+
+.carry-seg-btn.active {
+  background: var(--accent);
+  color: #14161a;
+}
+
+.carry-summary {
+  font-size: 0.86rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.carry-summary strong { color: var(--text-main); }
+.carry-summary strong.under { color: var(--success); }
+.carry-summary strong.over { color: var(--danger); }
+
+.carry-amount-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.carry-amount-row .form-input {
+  flex: 1;
+  min-width: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.carry-quick {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.carry-quick-btn,
+.carry-day-chip {
+  touch-action: manipulation;
+  border: 1px solid var(--border);
+  background: var(--bg-card-subtle);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 700;
+  padding: 7px 10px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.carry-quick-btn.active,
+.carry-day-chip.active {
+  color: var(--accent);
+  border-color: rgba(245, 166, 35, 0.5);
+  background: var(--accent-muted);
+}
+
+.carry-dest {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.carry-dest:empty { display: none; }
+
+.carry-dest-title,
+.carry-preview-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-dim);
+}
+
+.carry-dest-opt {
+  touch-action: manipulation;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--border);
+  background: var(--bg-card-subtle);
+  color: var(--text-main);
+  font: inherit;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.carry-dest-opt.active {
+  border-color: rgba(245, 166, 35, 0.55);
+  background: var(--accent-muted);
+}
+
+.carry-dest-opt.static {
+  cursor: default;
+}
+
+.carry-dest-main {
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.carry-dest-sub {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.carry-day-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+/* The week after the carry, one column a day. */
+.carry-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.carry-preview:empty { display: none; }
+
+.carry-preview-week {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 3px;
+}
+
+.carry-preview-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 6px 0;
+  border-radius: var(--radius-sm);
+  background: var(--bg-card-subtle);
+  border: 1px solid var(--border);
+  min-width: 0;
+}
+
+.carry-preview-day.is-day {
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.carry-preview-name {
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+
+.carry-preview-kcal {
+  font-size: 0.74rem;
+  font-weight: 800;
+  color: var(--text-main);
+  font-variant-numeric: tabular-nums;
+}
+
+.carry-preview-diff {
+  font-size: 0.6rem;
+  font-weight: 700;
+  min-height: 0.8em;
+  font-variant-numeric: tabular-nums;
+}
+
+.carry-preview-day.up .carry-preview-diff { color: var(--success); }
+.carry-preview-day.down .carry-preview-diff { color: var(--accent); }
+.carry-preview-day.low .carry-preview-kcal { color: var(--danger); }
+
+.carry-preview-foot {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+
+.carry-warning {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--accent);
+  line-height: 1.4;
+}
+
+.carry-warning.is-error {
+  color: var(--danger);
+}
+
+.carry-remove-btn {
+  margin-right: auto;
+  color: rgba(239, 68, 68, 0.9);
+}
+
+#carry-submit-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+@media (max-width: 380px) {
+  /* The quick amounts drop under the field rather than squeezing it. */
+  .carry-amount-row { flex-wrap: wrap; }
+  .carry-amount-row .form-input { flex-basis: 100%; }
+}
+
+/* MEAL BUILDER CARD */
+.meal-builder-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.builder-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.builder-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.builder-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.builder-header {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* On a phone the three actions get their own full-width row, split evenly,
+   rather than crowding beside the title or wrapping raggedly. */
+@media (max-width: 560px) {
+  .builder-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  /* An explicit 3-up grid rather than flex: with flex-basis 0 the labels
+     shrank to a couple of characters wide. */
+  .builder-header-actions {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    width: 100%;
+    gap: 6px;
+  }
+
+  .builder-header-actions .pill-action-btn {
+    justify-content: center;
+    padding-left: 4px;
+    padding-right: 4px;
+    font-size: 0.72rem;
+    white-space: nowrap;
+    min-width: 0;
+  }
+
+  /* The icons are decorative here; the labels are what must stay readable. */
+  .builder-header-actions .pill-action-btn svg {
+    flex-shrink: 0;
+  }
+}
+
+.pill-action-btn {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.15s;
+}
+
+.pill-action-btn:hover {
+  color: var(--text-main);
+  background: #20242b;
+  border-color: var(--border-focus);
+}
+
+/* Food Item Builder List */
+.food-items-builder-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.food-builder-row {
+  background: var(--bg-card-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: relative;
+}
+
+.food-search-top-line {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  position: relative;
+}
+
+.food-search-input-field {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-main);
+  font-size: 0.88rem;
+  font-weight: 500;
+  padding: 8px 10px;
+  outline: none;
+  min-width: 0;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.food-search-input-field:focus {
+  border-color: rgba(245, 166, 35, 0.55);
+  box-shadow: 0 0 0 3px rgba(245, 166, 35, 0.12);
+}
+
+.food-search-input-field:focus {
+  border-color: var(--accent);
+}
+
+.trash-item-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-dim);
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.trash-item-btn:hover {
+  color: var(--danger);
+  background: var(--danger-muted);
+}
+
+/* Barcode Scanning */
+.scan-barcode-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-dim);
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.scan-barcode-btn:hover {
+  color: var(--accent);
+  background: var(--accent-muted);
+}
+
+/* The glyph sat low-left inside its box: SVGs are inline by default, so the
+   text baseline was adding descender space below it. */
+.scan-barcode-btn svg,
+.trash-item-btn svg {
+  display: block;
+  margin: 0 auto;
+}
+
+/* The camera preview with its controls laid over it. */
+.barcode-viewfinder {
+  position: relative;
+}
+
+.barcode-video-wrap {
+  position: relative;
+  width: 100%;
+  /* Placeholder only, until the real stream arrives. applyVideoAspectRatio()
+     overwrites this inline with the camera's true dimensions - do not rely on
+     this value, and do not restore a fixed ratio here. Forcing 4/3 against a
+     16:9 stream is what made the preview soft and cropped. */
+  aspect-ratio: 4 / 3;
+  background: #000;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  cursor: crosshair;
+}
+
+.barcode-video-wrap video {
+  width: 100%;
+  height: 100%;
+  /* contain, not cover: the wrapper already matches the stream, and cover
+     would silently crop the frame away from the reticle mapping. */
+  object-fit: contain;
+  display: block;
+}
+
+/* MUST stay in step with getReticleFrame() in app.js: left/right 8% gives an
+   84%-wide box, and height is 28%. Those numbers are duplicated there to crop
+   the frame that is actually decoded.
+   Drawn as four corner brackets rather than a full box, so the barcode's own
+   edges stay visible right up to the frame. Turns green while a code is
+   being confirmed. */
+.barcode-reticle {
+  --reticle: var(--accent);
+  position: absolute;
+  top: 50%;
+  left: 8%;
+  right: 8%;
+  height: 28%;
+  transform: translateY(-50%);
+  border-radius: 4px;
+  background:
+    linear-gradient(var(--reticle), var(--reticle)) top left / 26px 3px,
+    linear-gradient(var(--reticle), var(--reticle)) top left / 3px 32%,
+    linear-gradient(var(--reticle), var(--reticle)) top right / 26px 3px,
+    linear-gradient(var(--reticle), var(--reticle)) top right / 3px 32%,
+    linear-gradient(var(--reticle), var(--reticle)) bottom left / 26px 3px,
+    linear-gradient(var(--reticle), var(--reticle)) bottom left / 3px 32%,
+    linear-gradient(var(--reticle), var(--reticle)) bottom right / 26px 3px,
+    linear-gradient(var(--reticle), var(--reticle)) bottom right / 3px 32%;
+  background-repeat: no-repeat;
+  box-shadow: 0 0 0 2000px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+
+.barcode-scanner-box.reading .barcode-reticle {
+  --reticle: var(--success);
+}
+
+/* A line sweeping the frame, so a live camera reads as working. The line is
+   drawn at the top of a box as tall as its track and the box is slid by its
+   own height - a transform, so the sweep costs no layout while the decoder
+   is busy. */
+.barcode-reticle-line {
+  position: absolute;
+  inset: 14% 10px;
+}
+
+.barcode-reticle-line::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, var(--reticle) 18%, var(--reticle) 82%, transparent) top / 100% 2px no-repeat;
+  opacity: 0.7;
+  animation: barcode-sweep 1.6s ease-in-out infinite alternate;
+}
+
+@keyframes barcode-sweep {
+  from { transform: translateY(0); }
+  to { transform: translateY(100%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .barcode-reticle-line { display: none; }
+}
+
+/* What the scanner is doing, on the preview itself where the eye already is. */
+.barcode-scan-status {
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100% - 20px);
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  background: rgba(8, 9, 12, 0.72);
+  color: #f3f4f6;
+  font-size: 0.74rem;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.barcode-scanner-box.reading .barcode-scan-status {
+  color: #6ee7b7;
+}
+
+/* Lens and torch, over the top corner of the preview. */
+.barcode-cam-buttons {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  gap: 8px;
+}
+
+.barcode-cam-btn {
+  touch-action: manipulation;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(8, 9, 12, 0.6);
+  color: #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.barcode-cam-btn:hover {
+  background: rgba(8, 9, 12, 0.85);
+}
+
+.barcode-cam-btn[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #14161a;
+}
+
+.barcode-cam-btn svg {
+  display: block;
+}
+
+/* No camera to show - a browser without live scanning, or one that refused
+   the camera. The black preview gives way to a short panel saying so, with
+   the typed-in digits just below it as the way on. */
+.barcode-no-camera-icon {
+  display: none;
+}
+
+.barcode-scanner-box.no-camera .barcode-video-wrap {
+  aspect-ratio: auto;
+  min-height: 140px;
+  padding: 18px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: var(--bg-card-subtle);
+  border: 1px dashed var(--border-focus);
+  cursor: default;
+}
+
+.barcode-scanner-box.no-camera video,
+.barcode-scanner-box.no-camera .barcode-reticle,
+.barcode-scanner-box.no-camera .barcode-cam-buttons,
+.barcode-scanner-box.no-camera .barcode-help {
+  display: none;
+}
+
+.barcode-scanner-box.no-camera .barcode-no-camera-icon {
+  display: block;
+  color: var(--text-dim);
+}
+
+.barcode-scanner-box.no-camera .barcode-scan-status {
+  position: static;
+  transform: none;
+  max-width: 280px;
+  padding: 0;
+  background: none;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+/* Deeper search: store chips + pagination */
+.dropdown-store-chips {
+  display: flex;
+  gap: 6px;
+  padding: 8px 10px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border);
+  scrollbar-width: none;
+}
+
+.dropdown-store-chips::-webkit-scrollbar { display: none; }
+
+.store-chip {
+  background: var(--bg-card-subtle);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+
+.store-chip:hover { border-color: var(--border-focus); }
+
+.store-chip.active {
+  background: var(--accent-muted);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.autocomplete-brand {
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+  /* A long brand ellipsises rather than pushing everything else out. */
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.autocomplete-save-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  align-self: center;
+  transition: all 0.15s;
+}
+
+.autocomplete-save-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-muted);
+}
+
+.dropdown-show-more {
+  padding: 9px 12px;
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+  border-top: 1px solid var(--border);
+}
+
+.dropdown-show-more:hover { background: var(--accent-muted); }
+
+/* Voice capture */
+.voice-record-btn {
+  align-self: center;
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  background: var(--accent-muted);
+  border: 2px solid var(--accent);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.voice-record-btn.recording {
+  background: var(--accent);
+  color: #000;
+  animation: voice-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes voice-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--accent-glow); }
+  50% { box-shadow: 0 0 0 12px transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-record-btn.recording { animation: none; }
+}
+
+.voice-status {
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+
+.voice-transcript {
+  min-height: 20px;
+  text-align: center;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.voice-hint {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+.voice-hint strong { color: var(--accent); }
+
+.voice-add-food-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 9px;
+  background: transparent;
+  border: 1px dashed var(--border-focus);
+  border-radius: var(--radius-md);
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.voice-add-food-btn:hover { background: var(--accent-muted); }
+
+.parsed-item-name-input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-main);
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 5px 8px;
+}
+
+.parsed-item-name-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.parsed-unmatched { color: var(--danger); }
+
+.parsed-learned {
+  color: var(--success);
+  font-weight: 600;
+}
+
+.voice-clear-aliases {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 0.7rem;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+  margin-left: 2px;
+}
+
+.voice-clear-aliases:hover { color: var(--accent); }
+
+.parsed-approx {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.parsed-item-del { flex-shrink: 0; }
+
+/* Page behind a dialog must not scroll. */
+body.modal-open {
+  overflow: hidden;
+  touch-action: none;
+}
+
+/* "View 10 more" pagination control */
+.view-more-btn {
+  width: 100%;
+  padding: 8px;
+  margin-top: 2px;
+  background: var(--bg-card-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.view-more-btn:hover {
+  background: var(--accent-muted);
+  border-color: var(--accent);
+}
+
+/* "View 10 more" and "Show all" side by side, half each. */
+.view-more-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.view-more-split .view-more-btn {
+  margin-top: 0;
+}
+
+/* Today's Log meal cards, matching the Past History treatment */
+.today-meal-group {
+  background: var(--bg-card-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 8px 12px;
+}
+
+.today-meal-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.today-meal-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  color: var(--text-main);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+
+.today-meal-arrow {
+  display: flex;
+  color: var(--text-dim);
+  transition: transform 0.18s ease;
+  flex-shrink: 0;
+}
+
+.today-meal-group.open .today-meal-arrow {
+  transform: rotate(180deg);
+}
+
+/* Collapsed by default; the meal name and its kcal stay visible. */
+.today-meal-body {
+  display: none;
+  margin-top: 10px;
+}
+
+.today-meal-group.open .today-meal-body {
+  display: block;
+}
+
+.today-meal-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* One food per line. The previous inline pills wrapped mid-value on a phone,
+   splitting "61g" across two lines and squeezing names into narrow columns. */
+.today-food-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+/* Two lines, matching the Foods tab: quantity, name and actions on top, the
+   full macro breakdown underneath. Four macros cannot share a line with the
+   name and two buttons on a phone. */
+.today-food-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 7px 9px;
+}
+
+.today-food-main {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.today-food-actions {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.today-food-pills {
+  font-size: 0.68rem;
+  gap: 5px;
+}
+
+.today-food-qty {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.today-food-name {
+  font-size: 0.8rem;
+  color: var(--text-main);
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+.today-food-kcal {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+/* The meal total sits here now rather than in the heading, so it reads as a
+   row of pills like every other macro line in the app. */
+.today-meal-macros {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+
+.today-meal-macros .macro-pill {
+  font-weight: 700;
+}
+
+/* A hand-edited macro is marked so it is obvious the value is no longer
+   derived from the quantity. */
+.stat-box-input.overridden {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* Scroll performance: promote the heavy repeating surfaces to their own layer
+   and stop the browser recalculating off-screen card layout on every frame. */
+.history-session-card,
+.today-meal-group,
+.logged-meal-item {
+  contain: layout paint style;
+}
+
+.view-panel {
+  -webkit-overflow-scrolling: touch;
+  /* The browser keeps vertical scrolling; sideways drags are left to the
+     page swipe in app.js. Pinch zoom is already off in the viewport tag. */
+  touch-action: pan-y;
+}
+
+/* While a page is dragged sideways the column also holds the page coming in
+   beside it, laid out over it by app.js. A mouse drag (only - see app.js)
+   neither selects text on the way nor shows a text cursor. */
+.app-container.page-swiping {
+  position: relative;
+}
+
+body.page-dragging,
+body.page-dragging * {
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: grabbing !important;
+}
+
+#panel-weights .day-header-row {
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 620px) {
+  /* The title, the three-way toggle and Fit Timeline will not share one line
+     on a phone - the toggle was pushing Fit Timeline off the edge. Controls
+     take a row of their own underneath. */
+  #panel-weights .weight-chart-controls {
+    flex: 1 1 100%;
+    justify-content: space-between;
+  }
+  .weight-mode-btn {
+    padding: 4px 8px;
+    font-size: 0.66rem;
+  }
+}
+
+#panel-weights .day-header-row h2 {
+  white-space: nowrap;
+  font-size: 1.05rem;
+  letter-spacing: -0.3px;
+}
+
+.weight-chart-controls {
+  flex-shrink: 0;
+}
+
+#reset-weight-zoom-btn {
+  white-space: nowrap;
+}
+
+.weight-chart-wrapper {
+  will-change: transform;
+  transform: translateZ(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Weight entry: a two-column grid with the button on its own full-width row,
+   so the date picker and number field always get usable space. The old
+   three-across form-row squeezed all three into one line. */
+.weight-quick-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  margin-top: 6px;
+  align-items: end;
+}
+
+@media (max-width: 560px) {
+  /* Three fields across a phone leaves the date unreadable, so it takes the
+     full first row and the two figures share the second. */
+  .weight-quick-form {
+    grid-template-columns: 1fr 1fr;
+  }
+  .weight-quick-form .form-group:first-child {
+    grid-column: 1 / -1;
+  }
+}
+
+/* WEIGHT / BODY FAT CHART TOGGLE */
+.weight-mode-toggle {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 2px;
+}
+
+.weight-mode-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  white-space: nowrap;
+  touch-action: manipulation;
+}
+
+.weight-mode-btn:hover {
+  color: var(--text-main);
+}
+
+.weight-mode-btn.active {
+  background: var(--accent);
+  color: #14161a;
+  font-weight: 700;
+}
+
+/* WEIGHT ENTRY LIST */
+/* Fixed tracks rather than a flex row. Content-sized columns are measured
+   per row, so the weights, the chips and the buttons all landed at a
+   different x on every line and the list read as ragged. */
+.weight-entry-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 76px 58px auto;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 6px 10px 6px 12px;
+}
+
+.weight-entry-date {
+  font-size: 0.8rem;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.weight-entry-kg {
+  color: var(--accent);
+  font-size: 0.9rem;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* Same cyan the body-fat line uses on the chart. Stretched to its track so
+   every chip is the same width down the list. */
+.weight-entry-bf {
+  color: var(--carbs);
+  background: var(--carbs-muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 3px 6px;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+  text-align: center;
+  justify-self: stretch;
+}
+
+/* Entries logged before you started tracking body fat keep the column so
+   the rows either side still line up - they just leave it blank. */
+.weight-entry-bf.is-empty {
+  background: none;
+}
+
+.weight-entry-actions {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.weight-entry-actions .pill-icon-btn {
+  background: rgba(255, 255, 255, 0.04);
+  min-width: 28px;
+  min-height: 28px;
+  border-radius: var(--radius-md);
+}
+
+@media (max-width: 360px) {
+  /* At this width the date runs out of room, so the columns tighten and the
+     chip drops its 'BF' suffix - the cyan and the % already say what it is. */
+  .weight-entry-row {
+    grid-template-columns: minmax(0, 1fr) 44px 46px auto;
+    gap: 4px;
+    padding: 8px 6px 8px 9px;
+  }
+  .weight-entry-date { font-size: 0.74rem; }
+  .weight-entry-kg { font-size: 0.82rem; }
+  .weight-entry-bf { font-size: 0.62rem; padding: 3px 4px; }
+  .bf-suffix { display: none; }
+  .weight-entry-actions .pill-icon-btn {
+    min-width: 24px;
+    min-height: 24px;
+  }
+}
+
+.weight-quick-form .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.weight-quick-form .form-input {
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+}
+
+.weight-save-btn {
+  grid-column: 1 / -1;
+  height: 42px;
+  width: 100%;
+  font-weight: 700;
+}
+
+/* Wide enough for all three fields and the button on one line. With a column
+   short, body fat was squeezed off the card's edge and Save sat alone on a
+   second row. */
+@media (min-width: 620px) {
+  .weight-quick-form {
+    grid-template-columns: 1fr 1fr 1fr auto;
+  }
+
+  .weight-save-btn {
+    grid-column: auto;
+    width: auto;
+    padding-left: 22px;
+    padding-right: 22px;
+  }
+}
+
+.parsed-item-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.parsed-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--bg-card-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.parsed-item-main { flex: 1; min-width: 0; }
+
+.parsed-item-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.parsed-item-sub {
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  word-break: break-word;
+}
+
+.parsed-item-qty {
+  width: 64px;
+  flex-shrink: 0;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text);
+  padding: 6px 8px;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.barcode-zoom-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 4px;
+}
+
+.barcode-zoom-row label {
+  display: flex;
+  color: var(--text-muted);
+}
+
+.barcode-zoom-slider {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--accent);
+}
+
+.barcode-zoom-value {
+  font-size: 0.74rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+  min-width: 36px;
+  text-align: right;
+}
+
+/* Give the preview the full width of the sheet on a phone: more physical
+   pixels on the barcode, and an easier target to line up. */
+@media (max-width: 520px) {
+  #barcode-scanner-modal .modal-box {
+    max-width: 100%;
+  }
+
+  #barcode-scanner-modal .modal-body {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}
+
+.barcode-manual-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* "or ..." between two hairlines. */
+.barcode-or {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-align: center;
+}
+
+.barcode-or::before,
+.barcode-or::after {
+  content: '';
+  flex: 1;
+  min-width: 16px;
+  height: 1px;
+  background: var(--border);
+}
+
+.barcode-manual-row {
+  display: flex;
+  gap: 8px;
+}
+
+.barcode-manual-row .form-input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The focus advice, folded away until it is wanted. */
+.barcode-help {
+  font-size: 0.74rem;
+  color: var(--text-dim);
+  text-align: center;
+}
+
+.barcode-help summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 8px;
+  border-radius: var(--radius-pill);
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  list-style: none;
+}
+
+.barcode-help summary::-webkit-details-marker {
+  display: none;
+}
+
+.barcode-help summary::after {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform 0.15s;
+}
+
+.barcode-help[open] summary::after {
+  transform: translateY(1px) rotate(225deg);
+}
+
+.barcode-help summary:hover {
+  color: var(--text-main);
+}
+
+.barcode-help p {
+  margin-top: 4px;
+  line-height: 1.5;
+}
+
+.barcode-help strong {
+  color: var(--text-muted);
+}
+
+/* What the camera actually handed us, so a soft preview can be diagnosed by
+   reading a number instead of guessing. */
+.barcode-camera-info {
+  margin-top: 6px;
+  font-size: 0.66rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+  opacity: 0.75;
+}
+
+.barcode-camera-info:empty {
+  display: none;
+}
+
+.barcode-result-head {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.barcode-result-img {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  border-radius: var(--radius-md);
+  background: var(--bg-card-subtle);
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.barcode-result-img.placeholder {
+  display: block;
+}
+
+.barcode-result-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.barcode-result-name {
+  font-weight: 700;
+  font-size: 0.95rem;
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.barcode-result-brand {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+
+.barcode-result-pills {
+  flex-wrap: wrap;
+}
+
+.barcode-result-serving,
+.barcode-result-code {
+  font-size: 0.74rem;
+  color: var(--text-dim);
+}
+
+.barcode-attribution {
+  padding: 0 20px 8px;
+  font-size: 0.68rem;
+  color: var(--text-dim);
+}
+
+.save-food-barcode-hint {
+  font-size: 0.74rem;
+  color: var(--accent);
+}
+
+.barcode-notfound-label {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+
+.barcode-notfound-code {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--accent);
+  padding: 10px 12px;
+  background: var(--bg-card-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  text-align: center;
+  word-break: break-all;
+}
+
+.barcode-notfound-hint {
+  font-size: 0.74rem;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+/* Autocomplete Dropdown */
+.food-autocomplete-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: #14171d;
+  border: 1px solid var(--border-focus);
+  border-radius: var(--radius-lg);
+  /* Roomy enough to show several results without scrolling. Capped against the
+     viewport so it can never run off the bottom of a short screen. */
+  max-height: min(70vh, 520px);
+  overflow-y: auto;
+  z-index: 90;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.85);
+  display: none;
+}
+
+@media (max-width: 560px) {
+  .food-autocomplete-dropdown {
+    max-height: min(60vh, 420px);
+  }
+}
+
+.food-autocomplete-dropdown.open {
+  display: block;
+}
+
+.autocomplete-option {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  display: flex;
+  /* Row, so the save-to-database button sits beside the food rather than
+     stacking underneath it. */
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  transition: background 0.12s ease;
+}
+
+.autocomplete-option:hover {
+  background: rgba(245, 166, 35, 0.08);
+}
+
+/* Keyboard cursor. Arrow keys walk the list with the pointer nowhere near
+   it, so the current entry has to read as selected on its own. */
+.autocomplete-option.kbd-active,
+.dropdown-show-more.kbd-active {
+  background: rgba(245, 166, 35, 0.16);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.dropdown-action-btn.log-only.kbd-active {
+  background: #20242d;
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.dropdown-action-btn.save-db.kbd-active {
+  background: var(--accent);
+  color: #111;
+}
+
+.autocomplete-food-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.autocomplete-food-name-row {
+  display: flex;
+  /* Wrap, so a long brand and the source badge drop to their own line instead
+     of crushing the food name into a one-character-wide column. */
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+
+.autocomplete-food-name {
+  /* Guaranteed a usable share of the row. Without a min-width the name is the
+     only shrinkable item here (the brand is nowrap, the badge never shrinks),
+     so it absorbed the entire squeeze. */
+  flex: 1 1 auto;
+  min-width: 45%;
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--text-main);
+  line-height: 1.25;
+  /* overflow-wrap, NOT word-break: break-word. The latter drops min-content
+     width to zero, which is what let this collapse to one letter per line. */
+  overflow-wrap: break-word;
+}
+
+.autocomplete-macro-pills {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+}
+
+.macro-pill {
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  font-weight: 600;
+}
+
+.macro-pill.kcal { color: #f3f4f6; font-weight: 700; }
+.macro-pill.prot { color: var(--protein); border-color: rgba(249, 115, 22, 0.25); background: rgba(249, 115, 22, 0.08); }
+.macro-pill.carb { color: var(--carbs); border-color: rgba(6, 182, 212, 0.25); background: rgba(6, 182, 212, 0.08); }
+.macro-pill.fat { color: var(--fat); border-color: rgba(192, 132, 252, 0.25); background: rgba(192, 132, 252, 0.08); }
+.macro-per-qty { color: var(--text-dim); font-size: 0.68rem; margin-left: 2px; }
+
+/* A food quoted against something other than 100g needs to say so loudly -
+   it changes what the macros beside it mean. */
+.macro-per-qty.custom-basis {
+  color: var(--success);
+  font-weight: 700;
+}
+
+.source-badge {
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: var(--radius-pill);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.source-badge.db {
+  background: rgba(16, 185, 129, 0.18);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+.source-badge.openfood {
+  background: rgba(6, 182, 212, 0.18);
+  color: #38bdf8;
+  border: 1px solid rgba(6, 182, 212, 0.35);
+}
+
+.source-badge.usda {
+  background: rgba(249, 115, 22, 0.18);
+  color: #fb923c;
+  border: 1px solid rgba(249, 115, 22, 0.35);
+}
+
+.dropdown-actions-footer {
+  padding: 8px;
+  background: #0f1217;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+}
+
+.dropdown-action-btn {
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.dropdown-action-btn.log-only {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text-main);
+}
+
+.dropdown-action-btn.log-only:hover {
+  background: #20242d;
+  border-color: var(--border-focus);
+  color: #fff;
+}
+
+.dropdown-action-btn.save-db {
+  background: rgba(245, 166, 35, 0.14);
+  border: 1px solid rgba(245, 166, 35, 0.4);
+  color: var(--accent);
+}
+
+.dropdown-action-btn.save-db:hover {
+  background: var(--accent);
+  color: #111;
+}
+
+.autocomplete-no-match {
+  padding: 10px 12px;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  text-align: center;
+}
+
+/* 5 Macro Stat Boxes in a Row */
+.food-stat-boxes-row {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr 1fr 1fr 1fr;
+  gap: 6px;
+}
+
+.stat-box-cell {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 6px 2px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.stat-box-input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  text-align: center;
+  color: var(--text-main);
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  font-weight: 700;
+  outline: none;
+}
+
+.stat-box-val {
+  font-family: var(--font-mono);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.stat-box-lbl {
+  font-size: 0.56rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  letter-spacing: 0.6px;
+}
+
+/* The same yellow as the Calories figure at the top of the Tracker. */
+.stat-box-val.kcal, .stat-box-lbl.kcal { color: var(--accent); }
+.stat-box-val.prot, .stat-box-lbl.prot { color: var(--protein); }
+.stat-box-val.carb, .stat-box-lbl.carb { color: var(--carbs); }
+.stat-box-val.fat, .stat-box-lbl.fat { color: var(--fat); }
+
+.add-food-row-btn {
+  background: transparent;
+  border: 1px dashed rgba(255, 255, 255, 0.14);
+  border-radius: var(--radius-lg);
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 7px;
+  touch-action: manipulation;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.add-food-row-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(245, 166, 35, 0.03);
+}
+
+/* Meal Subtotal Bar */
+.meal-subtotal-bar,
+.todays-subtotal-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 12px;
+  background: var(--bg-card-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.meal-subtotal-lbl,
+.todays-subtotal-lbl {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.9px;
+  color: var(--text-dim);
+}
+
+.meal-subtotal-vals,
+.todays-subtotal-vals {
+  font-size: 0.84rem;
+  font-weight: 600;
+  display: flex;
+  gap: 10px;
+}
+
+.meal-subtotal-vals .kcal, .todays-subtotal-vals .kcal { color: var(--accent); font-weight: 700; }
+.meal-subtotal-vals .prot, .todays-subtotal-vals .prot { color: var(--protein); }
+.meal-subtotal-vals .carb, .todays-subtotal-vals .carb { color: var(--carbs); }
+.meal-subtotal-vals .fat, .todays-subtotal-vals .fat { color: var(--fat); }
+
+.log-meal-btn {
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.1px;
+  padding: 10px 14px;
+  touch-action: manipulation;
+  border-radius: var(--radius-pill);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.log-meal-btn.primary-log-btn {
+  background: var(--accent);
+  color: #14161a;
+  /* Was a halo around the whole button. A shadow that falls downward
+     reads as a raised control instead of a glowing one. */
+  box-shadow: 0 5px 16px -8px rgba(245, 166, 35, 0.55);
+}
+
+.log-meal-btn.primary-log-btn:hover {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+}
+
+/* TODAY'S LOG CARD */
+.todays-log-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.todays-log-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.todays-log-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.todays-actions-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.todays-total-badge {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+}
+
+.log-day-btn {
+  background: var(--bg-input);
+  border: 1px solid var(--border-focus);
+  color: var(--accent);
+  font-size: 0.76rem;
+  font-weight: 700;
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.15s;
+}
+
+.log-day-btn:hover {
+  background: var(--accent);
+  color: #111;
+  border-color: var(--accent);
+}
+
+.empty-log-box {
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 4px;
+}
+
+.empty-icon {
+  color: var(--text-dim);
+  opacity: 0.6;
+}
+
+.empty-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.empty-desc {
+  font-size: 0.76rem;
+  color: var(--text-dim);
+  max-width: 300px;
+}
+
+.logged-meals-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.logged-meal-item {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 12px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.logged-meal-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.logged-meal-name {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.logged-meal-items-text {
+  font-size: 0.76rem;
+  color: var(--text-dim);
+  margin-top: 4px;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.logged-meal-macros {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.logged-meal-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.edit-entry-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.edit-entry-btn:hover {
+  color: var(--text-main);
+  border-color: var(--accent);
+  background: var(--accent-muted);
+}
+
+.delete-entry-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.delete-entry-btn:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: var(--danger-muted);
+}
+
+/* HISTORY SEARCH AND PAST DAY CARDS */
+.history-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.history-search-icon {
+  position: absolute;
+  left: 12px;
+  color: var(--text-dim);
+  pointer-events: none;
+}
+
+.history-search-input {
+  width: 100%;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-main);
+  font-size: 0.88rem;
+  font-weight: 500;
+  padding: 10px 38px 10px 34px;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.history-search-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-muted);
+}
+
+/* The browser draws its own clear affordance on type=search, which sits
+   badly against the rounded field and does nothing about our state. */
+.history-search-input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.history-search-clear {
+  position: absolute;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: none;
+  background: var(--bg-input);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.history-search-clear:hover {
+  background: var(--bg-input-focus);
+  color: var(--text-main);
+}
+
+.history-search-summary {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding-left: 2px;
+}
+
+/* The hit itself. A tinted ground rather than a highlighter block, so a
+   marked word still reads as part of the sentence around it. */
+mark.search-hit {
+  background: var(--accent-muted);
+  color: var(--accent);
+  border-radius: 3px;
+  padding: 0 2px;
+  font-weight: 700;
+}
+
+.history-session-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: border-color 0.15s;
+}
+
+.history-session-card:hover {
+  border-color: var(--border-focus);
+}
+
+.history-card-header-btn {
+  background: transparent;
+  border: none;
+  width: 100%;
+  padding: 14px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  text-align: left;
+  gap: 8px;
+  user-select: none;
+}
+
+.history-card-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.history-dropdown-arrow {
+  color: var(--text-dim);
+  transition: transform 0.2s ease;
+  display: flex;
+  align-items: center;
+}
+
+.history-session-card.open .history-dropdown-arrow {
+  transform: rotate(180deg);
+  color: var(--accent);
+}
+
+.history-session-date {
+  font-weight: 600;
+  font-size: 0.86rem;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.history-card-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* A chip, so a four-digit total cannot break across two lines beside a
+   long date - which is exactly what it was doing on a phone. */
+.history-total-kcal {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--accent-muted);
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+}
+
+.history-card-body {
+  display: none;
+  padding: 0 16px 14px 16px;
+  flex-direction: column;
+  gap: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  padding-top: 12px;
+}
+
+.history-session-card.open .history-card-body {
+  display: flex;
+}
+
+.history-macros-row {
+  display: flex;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  background: var(--bg);
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.history-items-formatted-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.history-meal-group {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.history-meal-group-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px;
+  line-height: 1.35;
+}
+
+.history-food-pills-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.history-food-pill {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  font-size: 0.76rem;
+  color: var(--text-main);
+  line-height: 1.3;
+  word-break: break-word;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+/* Editable food pills inside a past-day breakdown */
+.history-food-pill.editable-pill {
+  align-items: center;
+  padding-right: 4px;
+}
+
+.pill-macro-hint {
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+.pill-icon-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 3px;
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+  flex-shrink: 0;
+  /* Comfortable tap target on phones without inflating the pill */
+  min-width: 24px;
+  min-height: 24px;
+}
+
+.pill-icon-btn:hover {
+  background: var(--bg-input-focus);
+  color: var(--accent);
+}
+
+.pill-icon-btn.danger:hover {
+  color: var(--danger);
+  background: var(--danger-muted);
+}
+
+.history-card-footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+/* MODALS */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 5, 7, 0.88);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+  opacity: 0;
+  pointer-events: none;
+  /* A dozen of these full-screen blurred layers sit in the page at all times.
+     Transparent was not enough: the phone still had to account for them
+     while the keyboard resized the screen. Hidden takes them out of
+     rendering once the fade-out has finished. */
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0s linear 0.2s;
+}
+
+.modal-overlay.active {
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
+  /* Visible at once on open, not transitioned - even a reduced-motion
+     0.01ms transition left it hidden when openModal moves focus inside. */
+  transition: opacity 0.2s ease;
+}
+
+/* The backdrop is already 88% opaque, so on a phone the blur behind it is
+   barely visible - but it is re-rendered on every frame the keyboard slides
+   in or out of an open dialog. */
+@media (max-width: 680px) {
+  .modal-overlay {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+.modal-box {
+  width: 100%;
+  max-width: 480px;
+  max-height: 90vh;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 24px 60px -12px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transform: translateY(10px) scale(0.98);
+  transition: transform 0.2s ease;
+}
+
+.modal-overlay.active .modal-box {
+  transform: translateY(0) scale(1);
+}
+
+.modal-header {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-header h2 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.modal-body {
+  padding: 16px 18px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.modal-footer {
+  padding: 12px 18px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* Forms & Inputs */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.form-group label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  letter-spacing: 0.4px;
+}
+
+.form-input {
+  width: 100%;
+  padding: 9px 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-main);
+  font-size: 0.88rem;
+  outline: none;
+}
+
+.form-input:focus {
+  border-color: var(--accent);
+}
+
+/* Date fields: the native control keeps its picker and its value, but its
+   own text - laid out month-first on an en-US browser - is hidden, and a
+   day/month/year label sits over it instead. */
+.date-field {
+  position: relative;
+  width: 100%;
+}
+
+.date-native {
+  color: transparent;
+  caret-color: transparent;
+  cursor: pointer;
+}
+
+/* Chrome paints the segments, and the highlighted one, on its own layer. */
+.date-native::-webkit-datetime-edit {
+  opacity: 0;
+}
+
+.date-native::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+}
+
+.date-field-label {
+  position: absolute;
+  left: 13px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.88rem;
+  color: var(--text-main);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.date-field-label.is-empty {
+  color: var(--text-dim);
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+  gap: 8px;
+}
+
+/* Protein, carbs and fat always sit on one line. auto-fit would drop one of
+   them onto a row of its own the moment the dialog got narrow. */
+.form-row.macro-trio {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+/* Three columns leaves roughly 80px per label on a small phone, which is
+   under the default label size - "PROTEIN (G)" was breaking mid-word. */
+.macro-trio .form-group label {
+  font-size: 0.63rem;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+
+.macro-trio .form-input {
+  padding: 9px 8px;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #111;
+  font-size: 0.84rem;
+  font-weight: 700;
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-primary:hover {
+  background: var(--accent-hover);
+}
+
+.btn-secondary {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text-main);
+  font-size: 0.84rem;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+
+.btn-secondary:hover {
+  background: #20242b;
+}
+
+.btn-danger {
+  background: var(--danger);
+  border: none;
+  color: #fff;
+  font-size: 0.84rem;
+  font-weight: 700;
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+
+.btn-danger:hover {
+  background: #dc2626;
+}
+
+/* Toast */
+.toast-container {
+  position: fixed;
+  bottom: 70px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 2000;
+  pointer-events: none;
+}
+
+.toast {
+  background: #1c2026;
+  color: #fff;
+  border: 1px solid var(--border);
+  padding: 8px 14px;
+  border-radius: var(--radius-pill);
+  font-size: 0.8rem;
+  font-weight: 600;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+  pointer-events: auto;
+  animation: slideIn 0.2s ease;
+}
+
+.toast.success { border-color: var(--success); }
+.toast.error { border-color: var(--danger); }
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse {
+  from { opacity: 0.4; }
+  to { opacity: 1; }
+}
+
+/* FOOD DATABASE TAB */
+.foods-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.foods-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.foods-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-main);
+  letter-spacing: -0.3px;
+  white-space: nowrap;
+}
+
+/* How many foods there are, or how many match, tucked into the end of the
+   search field - on the header row it pushed Add Food onto a line of its
+   own on a phone. */
+.foods-count-badge {
+  position: absolute;
+  right: 8px;
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* Sort and Add Food. When the header wraps on a narrow phone this keeps the
+   actions on the right rather than dangling under the title. */
+.foods-header-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.foods-sort-btn {
+  white-space: nowrap;
+  touch-action: manipulation;
+}
+
+.foods-sort-btn[aria-expanded="true"] {
+  color: var(--text-main);
+  border-color: var(--border-focus);
+}
+
+.foods-add-btn {
+  color: var(--accent);
+  border-color: rgba(245, 166, 35, 0.35);
+  background: var(--accent-muted);
+  touch-action: manipulation;
+}
+
+.foods-add-btn:hover {
+  background: var(--accent);
+  color: #14161a;
+}
+
+.foods-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.foods-search-icon {
+  position: absolute;
+  left: 12px;
+  color: var(--text-dim);
+  pointer-events: none;
+}
+
+.foods-search-input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-main);
+  font-size: 0.88rem;
+  font-weight: 500;
+  padding: 10px 84px 10px 34px;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.foods-search-input:focus {
+  border-color: rgba(245, 166, 35, 0.55);
+  box-shadow: 0 0 0 3px rgba(245, 166, 35, 0.12);
+}
+
+.foods-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+/* One row per food: name above a single line of numbers, then two buttons.
+   The same shape on a phone and a desktop - the old row had three buttons
+   and four bordered pills, which wrapped into a jumble on a phone. */
+.food-db-row {
+  background: var(--bg-card-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 9px 8px 9px 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 4px;
+}
+
+.food-db-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  padding-right: 4px;
+}
+
+/* Two lines at most, so a long supermarket name cannot push the row tall. */
+.food-db-name {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-main);
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+/* Marks a food the scanner can find, which is worth knowing before you
+   consider deleting it. Inline, so it follows the last word of the name. */
+.food-db-barcode-flag {
+  display: inline-flex;
+  vertical-align: -2px;
+  color: var(--carbs);
+}
+
+.food-db-barcode-flag svg {
+  width: 13px;
+  height: 13px;
+}
+
+.food-db-macros {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  column-gap: 8px;
+  row-gap: 2px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* The serving the macros are quoted against. */
+.food-db-basis {
+  font-size: 0.64rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+}
+
+/* Anything other than the usual 100g changes what the numbers mean. */
+.food-db-basis.custom-basis {
+  color: var(--success);
+  background: var(--success-muted);
+  font-weight: 700;
+}
+
+.food-db-macro.kcal { color: var(--accent); font-weight: 700; }
+.food-db-macro.prot { color: var(--protein); }
+.food-db-macro.carb { color: var(--carbs); }
+.food-db-macro.fat { color: var(--fat); }
+
+.food-db-icon-btn {
+  touch-action: manipulation;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.food-db-icon-btn:hover,
+.food-db-icon-btn[aria-expanded="true"] {
+  background: var(--bg-input);
+  color: var(--text-main);
+}
+
+/* The one action people reach for most, so it carries the accent. */
+.food-db-add-btn {
+  color: var(--accent);
+  background: var(--accent-muted);
+}
+
+.food-db-add-btn:hover {
+  background: var(--accent);
+  color: #14161a;
+}
+
+/* MOBILE RESPONSIVE POLISH */
+@media (max-width: 640px) {
+  /* Nearly every food is per 100g, so on a phone that chip is repetition,
+     and dropping it keeps all four macros on one line. A different serving
+     still shows, since it changes what the numbers mean. */
+  .food-db-basis:not(.custom-basis) {
+    display: none;
+  }
+  /* The clearance for the bottom nav bar lives on body.app-active; a second
+     one here doubled the empty space under the last card. */
+  .brand-title {
+    font-size: 1.05rem;
+  }
+  .food-builder-row {
+    padding: 7px 8px;
+    gap: 5px;
+  }
+  .food-autocomplete-dropdown {
+    max-height: min(60vh, 420px);
+  }
+  /* Keep each result compact on a phone so several fit without scrolling -
+     the pills are what push a row tall when they wrap. */
+  .autocomplete-option {
+    padding: 8px 10px;
+    gap: 8px;
+  }
+  .autocomplete-macro-pills {
+    font-size: 0.66rem;
+    gap: 4px;
+  }
+  .macro-pill {
+    padding: 1px 4px;
+  }
+  .autocomplete-food-name {
+    font-size: 0.82rem;
+  }
+  /* Most results in this list are per 100g, so on a phone that suffix is pure
+     repetition - and dropping it keeps the four pills on one line, which is
+     worth roughly a whole extra food in view. Still shown on desktop, and
+     always shown for a food quoted against a different serving size. */
+  .autocomplete-option .macro-per-qty {
+    display: none;
+  }
+  .autocomplete-option .macro-per-qty.custom-basis {
+    display: inline;
+  }
+  .food-stat-boxes-row {
+    grid-template-columns: repeat(5, 1fr);
+    gap: 4px;
+  }
+  .stat-box-cell {
+    padding: 4px 1px;
+  }
+  .stat-box-lbl {
+    font-size: 0.52rem;
+  }
+  .stat-box-input {
+    font-size: 0.82rem;
+  }
+  .stat-box-val {
+    font-size: 0.8rem;
+  }
+  .daily-subtotal-stats {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+  }
+  .box-kcal { grid-column: span 3; }
+  .box-prot, .box-carb, .box-fat { grid-column: span 1; }
+  .box-kcal .val-main { font-size: 1.95rem; }
+  /* No room for the target and its note on one line: the two stack as one
+     block beside the number, centred on it, rather than the note hanging on
+     a line of its own under the target. */
+  .box-kcal .stat-value-group.has-note {
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+  }
+  .box-kcal .has-note .kcal-target-line {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+  }
+  .box-kcal .has-note .day-target-note {
+    font-size: 0.7rem;
+    line-height: 1.25;
+  }
+  /* Three tiles across a phone: the target reads under the value rather
+     than wrapping beside it. */
+  .box-prot .stat-value-group,
+  .box-carb .stat-value-group,
+  .box-fat .stat-value-group {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+  }
+  .box-prot, .box-carb, .box-fat {
+    padding: 7px 10px;
+  }
+  .box-prot .val-main,
+  .box-carb .val-main,
+  .box-fat .val-main {
+    font-size: 1.2rem;
+  }
+  .box-prot .val-sub,
+  .box-carb .val-sub,
+  .box-fat .val-sub {
+    font-size: 0.72rem;
+  }
+  /* The four figures could not share a line with the label: they wrapped to a
+     ragged second row with the fat value stranded on its own. Label above,
+     values in four even columns underneath. */
+  .meal-subtotal-bar,
+  .todays-subtotal-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+  }
+  .meal-subtotal-vals, .todays-subtotal-vals {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 5px;
+  }
+  .meal-subtotal-vals > span,
+  .todays-subtotal-vals > span {
+    text-align: center;
+    font-size: 0.78rem;
+    white-space: nowrap;
+  }
+  .history-card-header-btn {
+    padding: 10px 12px;
+  }
+}

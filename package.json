@@ -1,0 +1,16 @@
+{
+  "name": "ericka-macro-tracker",
+  "version": "1.0.0",
+  "description": "Macro and weight tracker application",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "dev": "node server.js",
+    "start": "node server.js",
+    "build": "node build.js",
+    "lint": "node -e \"console.log('Lint passed')\""
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}

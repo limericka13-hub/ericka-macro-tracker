@@ -1,0 +1,1132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Ericka's Macro Tracker</title>
+  <link rel="icon" href="/icon.svg?v=5" type="image/svg+xml">
+  <link rel="shortcut icon" href="/icon.svg?v=5" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icon.svg?v=5">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#090a0c">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Supabase & Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+<!-- Authentication / Login Screen -->
+<div id="login-screen-view" class="login-screen-container">
+  <div class="login-card">
+    <div class="login-brand-header">
+      <div class="login-brand-icon">
+        <img src="/icon.svg?v=5" alt="Ericka's Macro Tracker" width="44" height="44">
+      </div>
+      <h1 class="login-brand-title">Ericka's Macro Tracker</h1>
+      <p class="login-brand-subtitle">Cross-device nutrition logging, meal builder & weight ledger</p>
+    </div>
+
+    <div class="login-status-badge">
+      <span class="sync-circle-dot" style="background:var(--success); box-shadow:0 0 6px var(--success);"></span>
+      <span>Connected to Supabase Cloud</span>
+    </div>
+
+    <div id="login-auth-error-msg" class="auth-error-alert" style="display:none;"></div>
+
+    <form id="main-login-form" class="login-form">
+      <div class="form-group">
+        <label for="login-email-input">Account Email</label>
+        <input type="email" id="login-email-input" class="form-input" placeholder="name@example.com" required autocomplete="email">
+      </div>
+      <div class="form-group">
+        <label for="login-password-input">Password</label>
+        <input type="password" id="login-password-input" class="form-input" placeholder="••••••••" required autocomplete="current-password">
+      </div>
+
+      <div class="login-actions">
+        <button type="submit" id="login-signin-btn" class="btn-primary login-submit-btn">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><polyline points="10 17 15 12 10 7"></polyline><line x1="15" y1="12" x2="3" y2="12"></line></svg>
+          <span>Sign In & Sync Cloud</span>
+        </button>
+        <button type="button" id="login-signup-btn" class="btn-secondary" style="width:100%; padding:10px; font-size:0.85rem; font-weight:600;">
+          <span>Create New Supabase Account</span>
+        </button>
+      </div>
+    </form>
+
+    <div class="login-footer-info">
+      <span>Auto-syncs across Desktop & Mobile in real-time.</span>
+    </div>
+  </div>
+</div>
+
+<div id="main-app-container" class="app-container hidden">
+  <!-- Header Bar -->
+  <header class="app-header">
+    <div class="brand-wrap">
+      <div class="brand-icon-box">
+        <img src="/icon.svg?v=5" alt="Icon">
+      </div>
+      <h1 class="brand-title">Ericka's Macro Tracker</h1>
+    </div>
+
+    <!-- Desktop Navigation Tabs -->
+    <nav class="nav-tabs-desktop" aria-label="Main Navigation">
+      <button class="nav-tab-btn active" data-nav-target="dashboard">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8h1a4 4 0 0 1 0 8h-1"></path><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path><line x1="6" y1="1" x2="6" y2="4"></line><line x1="10" y1="1" x2="10" y2="4"></line><line x1="14" y1="1" x2="14" y2="4"></line></svg>
+        Tracker
+      </button>
+      <button class="nav-tab-btn" data-nav-target="weights">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 6v6l4 2"></path></svg>
+        Weight
+      </button>
+      <button class="nav-tab-btn" data-nav-target="foods">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+        Foods
+      </button>
+    </nav>
+
+    <!-- Header Actions -->
+    <div class="header-actions">
+      <button id="sync-status-circle-btn" class="sync-circle-btn synced" onclick="app.openModal('auth-login-modal')" title="Supabase Database Status & Sync">
+        <span class="sync-circle-dot"></span>
+      </button>
+      <button id="pwa-install-btn" class="icon-btn install-app-btn" type="button" title="Install app" style="display:none;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12"></path><path d="M7 18l5 5 5-5"></path><path d="M5 21h14"></path></svg>
+      </button>
+      <div class="header-menu-wrap">
+        <button id="header-menu-btn" class="icon-btn" type="button" title="More options"
+                aria-haspopup="true" aria-expanded="false" onclick="app.toggleHeaderMenu(event)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.9"></circle><circle cx="12" cy="12" r="1.9"></circle><circle cx="12" cy="19" r="1.9"></circle></svg>
+        </button>
+        <div id="header-menu-dropdown" class="header-menu-dropdown" role="menu">
+          <button type="button" class="header-menu-item" role="menuitem"
+                  onclick="app.closeHeaderMenu(); app.openModal('targets-modal');">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+            <span>Set Daily Targets</span>
+          </button>
+          <button type="button" class="header-menu-item" role="menuitem"
+                  onclick="app.closeHeaderMenu(); app.openExportModal();">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            <span>Download my data</span>
+          </button>
+          <button type="button" id="app-reload-btn" class="header-menu-item" role="menuitem"
+                  onclick="app.closeHeaderMenu(); app.reloadApp();">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+            <span>Reload app</span>
+          </button>
+          <button type="button" class="header-menu-item danger" role="menuitem" onclick="app.handleLogout()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+            <span>Sign Out</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div id="offline-banner" class="offline-banner">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="1" y1="1" x2="23" y2="23"></line><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"></path><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"></path><path d="M10.71 5.05A16 16 0 0 1 22.58 9"></path><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>
+    <span>Offline &mdash; showing your last synced data. New entries stay on this device until you reconnect.</span>
+  </div>
+
+  <!-- VIEW PANEL 1: TRACKER DASHBOARD -->
+  <main id="panel-dashboard" class="view-panel" style="display:flex; flex-direction:column; gap:8px;">
+
+    <!-- 0. Week Strip: picks the day the rest of this page shows -->
+    <div id="week-strip-card" class="week-strip-card">
+      <div class="week-strip-head">
+        <button type="button" id="week-strip-today-btn" class="week-strip-today-btn" onclick="app.goToToday()" title="Back to today">Today</button>
+        <div class="week-strip-center">
+          <button type="button" class="week-strip-icon-btn" onclick="app.shiftWeeklyOffset(-1)" title="Previous week" aria-label="Previous week">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
+          </button>
+          <div class="week-strip-month-wrap">
+            <button type="button" id="week-strip-month" class="week-strip-month" onclick="app.openDayPicker()" title="Jump to a date">
+              <span id="week-strip-month-text">This week</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </button>
+            <input type="date" id="week-strip-date-input" class="week-strip-date-input" tabindex="-1" aria-hidden="true"
+                   data-picker-only onchange="app.jumpToDate(this.value)">
+          </div>
+          <button type="button" class="week-strip-icon-btn" onclick="app.shiftWeeklyOffset(1)" title="Next week" aria-label="Next week">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+          </button>
+        </div>
+        <button type="button" class="week-strip-icon-btn week-strip-search-btn" onclick="app.openHistorySearch()" title="Search your history" aria-label="Search your history">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        </button>
+      </div>
+
+      <!-- Replaces the header and the days while searching -->
+      <div class="week-strip-search">
+        <div class="history-search-wrap">
+          <svg class="history-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <input type="search" id="history-search-input" class="history-search-input"
+                 placeholder="Search foods in your history"
+                 aria-label="Search foods and meals in your logged days"
+                 autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="search"
+                 oninput="app.handleHistorySearch(this.value)"
+                 onkeydown="if (event.key === 'Escape') app.closeHistorySearch()">
+          <button type="button" id="history-search-clear" class="history-search-clear"
+                  title="Clear search" aria-label="Clear search" style="display:none;"
+                  onclick="app.clearHistorySearch()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </button>
+        </div>
+        <button type="button" class="week-strip-search-done" onclick="app.closeHistorySearch()">Done</button>
+      </div>
+
+      <div id="week-strip-body" class="week-strip-body">
+        <div id="week-strip-days" class="week-strip-days" role="group" aria-label="Days of the week"></div>
+        <!-- A line from each day that carried calories to the days that took them -->
+        <div id="week-strip-carries" class="week-strip-carries"></div>
+        <div class="week-strip-chart-wrap">
+          <div class="week-strip-chart-inner">
+            <div class="week-strip-chart">
+              <div id="week-strip-plot" class="week-strip-plot"></div>
+            </div>
+            <div class="week-strip-stats">
+              <div class="week-strip-stat">
+                <span class="week-strip-stat-lbl">Week</span>
+                <span id="stat-week-total" class="week-strip-stat-val" data-stat="week">0 kcal</span>
+              </div>
+              <div class="week-strip-stat">
+                <span class="week-strip-stat-lbl">Daily avg</span>
+                <span id="stat-daily-avg" class="week-strip-stat-val" data-stat="avg">0 kcal</span>
+              </div>
+              <div class="week-strip-stat">
+                <span class="week-strip-stat-lbl">Remaining</span>
+                <span id="stat-remaining-budget" class="week-strip-stat-val highlight" data-stat="remaining">0 kcal left</span>
+              </div>
+            </div>
+            <div class="weekly-legend-row">
+              <div class="legend-item"><span class="legend-dot protein"></span><span>Protein</span></div>
+              <div class="legend-item"><span class="legend-dot carbs"></span><span>Carbs</span></div>
+              <div class="legend-item"><span class="legend-dot fat"></span><span>Fat</span></div>
+              <div class="legend-item"><span class="legend-line"></span><span>Target</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <button type="button" id="week-strip-toggle" class="week-strip-toggle" onclick="app.toggleWeekBars()"
+              aria-expanded="false" aria-controls="week-strip-body" aria-label="Show the week chart" title="Show the week chart">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+      </button>
+    </div>
+
+    <!-- Search results: every logged day, filtered by the query -->
+    <div id="history-search-results" class="history-search-results">
+      <div id="history-search-summary" class="history-search-summary" role="status" style="display:none;"></div>
+      <div id="past-history-logs-container" style="display:flex; flex-direction:column; gap:10px;"></div>
+    </div>
+
+    <!-- 1. Daily Macro Sub-Total -->
+    <div id="day-summary-card" class="daily-summary-card">
+      <div class="day-header-row">
+        <div class="date-title-group">
+          <!-- Only shown for a day that is not today -->
+          <svg class="day-away-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path><polyline points="3 3 3 8 8 8"></polyline><polyline points="12 7 12 12 15 14"></polyline></svg>
+          <div class="day-title-stack">
+            <span class="day-away-kicker" id="day-away-kicker"></span>
+            <span class="day-date-sub" id="subtotal-current-date-lbl">Today</span>
+          </div>
+        </div>
+        <button type="button" class="day-back-today-btn" onclick="app.goToToday()">Back to today</button>
+      </div>
+      <div class="daily-subtotal-stats">
+        <div class="subtotal-stat-box box-kcal">
+          <div class="stat-top-row">
+            <span class="lbl-badge kcal">Calories</span>
+            <!-- Carry a finished day's balance, or plan a high/low day -->
+            <button type="button" id="day-carry-btn" class="day-carry-btn" onclick="app.openCarrySheet()" hidden>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 2l4 4-4 4"></path><path d="M3 11v-1a4 4 0 0 1 4-4h14"></path><path d="M7 22l-4-4 4-4"></path><path d="M21 13v1a4 4 0 0 1-4 4H3"></path></svg>
+              <span id="day-carry-label">Plan day</span>
+            </button>
+          </div>
+          <div class="stat-value-group">
+            <span id="day-subtotal-kcal" class="val-main" style="color:var(--accent);">0</span>
+            <!-- The target, and why carries moved it: "(454 of this carried from Mon 28)" -->
+            <span class="kcal-target-line">
+              <span id="day-target-kcal-sub" class="val-sub">/ 2,000 kcal</span>
+              <span id="day-target-note" class="day-target-note" hidden></span>
+            </span>
+          </div>
+          <span id="day-remaining-kcal" class="val-remaining">2,000 left</span>
+        </div>
+        <div class="subtotal-stat-box box-prot">
+          <div class="stat-top-row">
+            <span class="lbl-badge prot">Protein</span>
+          </div>
+          <div class="stat-value-group">
+            <span id="day-subtotal-prot" class="val-main" style="color:var(--protein);">0g</span>
+            <span id="day-target-prot-sub" class="val-sub">/ 180g</span>
+          </div>
+          <span id="day-remaining-prot" class="val-remaining">180g left</span>
+        </div>
+        <div class="subtotal-stat-box box-carb">
+          <div class="stat-top-row">
+            <span class="lbl-badge carb">Carbs</span>
+          </div>
+          <div class="stat-value-group">
+            <span id="day-subtotal-carb" class="val-main" style="color:var(--carbs);">0g</span>
+            <span id="day-target-carb-sub" class="val-sub">/ 200g</span>
+          </div>
+          <span id="day-remaining-carb" class="val-remaining">200g left</span>
+        </div>
+        <div class="subtotal-stat-box box-fat">
+          <div class="stat-top-row">
+            <span class="lbl-badge fat">Fat</span>
+          </div>
+          <div class="stat-value-group">
+            <span id="day-subtotal-fat" class="val-main" style="color:var(--fat);">0g</span>
+            <span id="day-target-fat-sub" class="val-sub">/ 55g</span>
+          </div>
+          <span id="day-remaining-fat" class="val-remaining">55g left</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. Meal Builder Card -->
+    <div class="meal-builder-card">
+      <div class="builder-header">
+        <div class="builder-title">
+          <span>Meal Builder</span>
+        </div>
+        <div class="builder-header-actions">
+          <button id="builder-favorites-btn" class="pill-action-btn" onclick="app.openModal('favorites-modal')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+            Favorites
+          </button>
+          <button id="builder-voice-btn" class="pill-action-btn" onclick="app.openVoiceModal()" title="Say what you ate">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line></svg>
+            Voice
+          </button>
+          <button id="builder-save-fav-btn" class="pill-action-btn" onclick="app.openSaveFavoriteModal()" title="Save meal as favorite combo">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
+            Save
+          </button>
+        </div>
+      </div>
+
+      <!-- Shown while a logged meal is being edited in the builder -->
+      <div id="meal-edit-banner" class="meal-edit-banner">
+        <div class="meal-edit-banner-main">
+          <span class="meal-edit-banner-lbl">Editing<span id="meal-edit-banner-day"></span></span>
+          <input type="text" id="meal-edit-name-input" class="meal-edit-name-input" aria-label="Meal name"
+                 autocomplete="off" spellcheck="false" oninput="app.setMealEditName(this.value)">
+        </div>
+        <button type="button" class="meal-edit-cancel-btn" onclick="app.cancelMealEdit()">Cancel</button>
+      </div>
+
+      <!-- Food Items Builder Rows List -->
+      <div id="food-builder-rows-container" class="food-items-builder-list"></div>
+
+      <!-- Add Food Item Button -->
+      <button id="add-builder-row-btn" class="add-food-row-btn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        Add Food Item
+      </button>
+
+      <!-- Meal Subtotal Bar -->
+      <div class="meal-subtotal-bar">
+        <span class="meal-subtotal-lbl">MEAL SUBTOTAL:</span>
+        <div class="meal-subtotal-vals">
+          <span id="meal-subtotal-val-kcal" class="kcal">0 kcal</span>
+          <span id="meal-subtotal-val-prot" class="prot">P: 0.0g</span>
+          <span id="meal-subtotal-val-carb" class="carb">C: 0.0g</span>
+          <span id="meal-subtotal-val-fat" class="fat">F: 0.0g</span>
+        </div>
+      </div>
+
+      <!-- Log Meal Primary Button -->
+      <button id="log-meal-submit-btn" class="log-meal-btn primary-log-btn" title="Add this meal to Today's Log">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        <span>Log Meal</span>
+      </button>
+    </div>
+
+    <!-- 3. Today's Log Card -->
+    <div class="todays-log-card">
+      <div class="todays-log-header">
+        <div class="todays-log-title">
+          <span>Today's Log</span>
+        </div>
+      </div>
+
+      <div id="todays-logged-meals-list" class="logged-meals-list"></div>
+
+      <!-- Today's Live Subtotal Macros Bar -->
+      <div class="todays-subtotal-bar">
+        <span class="todays-subtotal-lbl">TODAY'S SUBTOTAL:</span>
+        <div class="todays-subtotal-vals">
+          <span id="todays-subtotal-val-kcal" class="kcal">0 kcal</span>
+          <span id="todays-subtotal-val-prot" class="prot">P: 0.0g</span>
+          <span id="todays-subtotal-val-carb" class="carb">C: 0.0g</span>
+          <span id="todays-subtotal-val-fat" class="fat">F: 0.0g</span>
+        </div>
+      </div>
+
+      <!-- Log Day Primary Button -->
+      <button class="log-meal-btn primary-log-btn" onclick="app.openLogDayModal()" title="Select date and archive into Past History">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        <span>Log Day</span>
+      </button>
+    </div>
+
+    <!-- 4. The selected day's archived logs (a past day, or one already logged today) -->
+    <div id="day-logs-section" class="day-logs-section"></div>
+  </main>
+
+  <!-- VIEW PANEL 2: WEIGHT TRACKER -->
+  <section id="panel-weights" class="view-panel" style="display:none; flex-direction:column; gap:12px;">
+    <div class="daily-summary-card">
+      <div class="day-header-row" style="margin-bottom:2px;">
+        <div>
+          <h2 style="font-size:1.1rem; font-weight:800;">Weight Tracker</h2>
+        </div>
+        <div class="weight-chart-controls" style="display:flex; align-items:center; gap:6px;">
+          <div id="weight-mode-toggle" class="weight-mode-toggle" style="display:none;">
+            <button type="button" class="weight-mode-btn" data-mode="weight" onclick="app.setWeightChartMode('weight')">Weight</button>
+            <button type="button" class="weight-mode-btn" data-mode="bf" onclick="app.setWeightChartMode('bf')">Body fat</button>
+            <button type="button" class="weight-mode-btn active" data-mode="both" onclick="app.setWeightChartMode('both')">Both</button>
+          </div>
+          <button type="button" class="btn-secondary" id="reset-weight-zoom-btn" style="padding:4px 10px; font-size:0.75rem; border-radius:var(--radius-pill);" onclick="app.resetWeightChartPan()">Fit Timeline</button>
+        </div>
+      </div>
+      <div class="weight-chart-wrapper" id="weight-chart-wrapper" style="height: 240px; width: 100%; position:relative;">
+        <canvas id="weight-chart-canvas"></canvas>
+      </div>
+      <form id="weight-quick-form" class="weight-quick-form">
+        <div class="form-group">
+          <label for="weight-date-input">Date</label>
+          <input type="date" id="weight-date-input" class="form-input" required>
+        </div>
+        <div class="form-group">
+          <label for="weight-num-input">Weight (kg)</label>
+          <input type="number" inputmode="decimal" step="0.1" id="weight-num-input" placeholder="e.g. 68.5" class="form-input" required>
+        </div>
+        <div class="form-group">
+          <label for="weight-bf-input">Body fat (%)</label>
+          <input type="number" inputmode="decimal" step="0.1" min="0" max="100" id="weight-bf-input" placeholder="optional" class="form-input">
+        </div>
+        <button type="submit" class="btn-primary weight-save-btn">Save Entry</button>
+      </form>
+      <div id="weight-entries-table" style="display:flex; flex-direction:column; gap:5px; margin-top:6px;"></div>
+    </div>
+  </section>
+
+  <!-- VIEW PANEL 3: FOOD LIST -->
+  <section id="panel-foods" class="view-panel" style="display:none; flex-direction:column; gap:12px;">
+    <div class="daily-summary-card">
+      <div class="foods-header-row">
+        <div class="foods-title-group">
+          <span class="foods-title">Food List</span>
+        </div>
+        <div class="foods-header-actions">
+          <button type="button" id="foods-sort-btn" class="pill-action-btn foods-sort-btn menu-trigger" onclick="app.openFoodsSortMenu(this)"
+                  title="Sort your foods" aria-haspopup="menu" aria-expanded="false">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4v16"></path><path d="M3 16l4 4 4-4"></path><path d="M17 20V4"></path><path d="M13 8l4-4 4 4"></path></svg>
+            <span id="foods-sort-label">A–Z</span>
+          </button>
+          <button type="button" class="pill-action-btn foods-add-btn menu-trigger" onclick="app.openAddFoodMenu(this)"
+                  title="Add a food to your list" aria-haspopup="menu" aria-expanded="false">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            Add Food
+          </button>
+        </div>
+      </div>
+
+      <div class="foods-search-wrap">
+        <svg class="foods-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        <input type="text" id="foods-search-input" class="foods-search-input" placeholder="Search your foods"
+               autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="search"
+               oninput="app.handleFoodsSearch(this.value)">
+        <span id="foods-count-badge" class="foods-count-badge" aria-live="polite">0 foods</span>
+      </div>
+
+      <div id="foods-list-container" class="foods-list"></div>
+    </div>
+  </section>
+
+  <!-- MOBILE BOTTOM NAVIGATION -->
+  <nav class="mobile-nav-bar" aria-label="Mobile Navigation">
+    <button class="mobile-nav-item active" data-nav-target="dashboard">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 8h1a4 4 0 0 1 0 8h-1"></path><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path><line x1="6" y1="1" x2="6" y2="4"></line><line x1="10" y1="1" x2="10" y2="4"></line><line x1="14" y1="1" x2="14" y2="4"></line></svg>
+      <span>Tracker</span>
+    </button>
+    <button class="mobile-nav-item" data-nav-target="weights">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"></circle><path d="M12 6v6l4 2"></path></svg>
+      <span>Weight</span>
+    </button>
+    <button class="mobile-nav-item" data-nav-target="foods">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+      <span>Foods</span>
+    </button>
+  </nav>
+</div>
+
+<!-- MODALS -->
+
+<!-- 0a. Carry a day's balance / plan a high or low day -->
+<div id="carry-modal" class="modal-overlay">
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="carry-modal-title" style="max-width:440px;">
+    <div class="modal-header">
+      <h2 id="carry-modal-title">Carry calories</h2>
+      <button type="button" class="icon-btn" data-modal-close>&#10005;</button>
+    </div>
+    <form id="carry-form" novalidate>
+      <div class="modal-body carry-body">
+        <div id="carry-mode-seg" class="carry-seg" role="group" aria-label="Carry or plan" hidden></div>
+        <p id="carry-summary" class="carry-summary"></p>
+        <div id="carry-dir-seg" class="carry-seg" role="group" aria-label="High or low day" hidden></div>
+        <div class="form-group">
+          <label for="carry-amount-input" id="carry-amount-label">Calories</label>
+          <div class="carry-amount-row">
+            <input type="number" inputmode="numeric" id="carry-amount-input" class="form-input" min="1" step="10"
+                   data-no-autofocus oninput="app.setCarrySheet({ amount: this.value }, false)">
+            <div id="carry-quick" class="carry-quick"></div>
+          </div>
+        </div>
+        <div id="carry-dest" class="carry-dest"></div>
+        <div id="carry-preview" class="carry-preview"></div>
+        <p id="carry-warning" class="carry-warning" role="status" hidden></p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" id="carry-remove-btn" class="btn-secondary carry-remove-btn" hidden>Undo carry</button>
+        <button type="button" class="btn-secondary" data-modal-close>Cancel</button>
+        <button type="submit" id="carry-submit-btn" class="btn-primary">Carry</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- 0b. Edit Weight Entry Modal -->
+<div id="edit-weight-modal" class="modal-overlay">
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="edit-weight-modal-title" style="max-width:400px;">
+    <div class="modal-header">
+      <h2 id="edit-weight-modal-title">Edit Weight Entry</h2>
+      <button type="button" class="icon-btn" data-modal-close>&#10005;</button>
+    </div>
+    <form id="edit-weight-form">
+      <div class="modal-body">
+        <input type="hidden" id="edit-weight-id">
+        <div class="form-group">
+          <label for="edit-weight-date">Date</label>
+          <input type="date" id="edit-weight-date" class="form-input" required>
+        </div>
+        <div class="form-row macro-trio" style="grid-template-columns:1fr 1fr;">
+          <div class="form-group">
+            <label for="edit-weight-kg">Weight (kg)</label>
+            <input type="number" inputmode="decimal" step="0.1" id="edit-weight-kg" class="form-input" required>
+          </div>
+          <div class="form-group">
+            <label for="edit-weight-bf">Body fat (%)</label>
+            <input type="number" inputmode="decimal" step="0.1" min="0" max="100" id="edit-weight-bf" class="form-input" placeholder="optional">
+          </div>
+        </div>
+        <span style="font-size:0.74rem; color:var(--text-dim);">
+          Leave body fat empty to keep the entry as weight only.
+        </span>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-secondary" data-modal-close>Cancel</button>
+        <button type="submit" class="btn-primary">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- 0. Download / Export Data Modal -->
+<div id="export-data-modal" class="modal-overlay">
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="export-data-modal-title" style="max-width:420px;">
+    <div class="modal-header">
+      <h2 id="export-data-modal-title">Download My Data</h2>
+      <button type="button" class="icon-btn" data-modal-close>&#10005;</button>
+    </div>
+    <div class="modal-body">
+      <span id="export-counts" class="export-counts"></span>
+      <div class="export-options">
+        <button type="button" class="export-option primary" onclick="app.exportJsonBackup()">
+          <span class="export-option-title">Full backup (JSON)</span>
+          <span class="export-option-desc">Everything: targets, foods, favourites, weigh-ins, archived days and today's meals.</span>
+        </button>
+        <button type="button" class="export-option" onclick="app.exportDaysCsv()">
+          <span class="export-option-title">Daily history (CSV)</span>
+          <span class="export-option-desc">One row per archived day with its totals. Opens in a spreadsheet.</span>
+        </button>
+        <button type="button" class="export-option" onclick="app.exportFoodsCsv()">
+          <span class="export-option-title">Food list (CSV)</span>
+          <span class="export-option-desc">Every food you have saved, with its serving size and macros.</span>
+        </button>
+        <button type="button" class="export-option" onclick="app.exportWeightsCsv()">
+          <span class="export-option-title">Weight log (CSV)</span>
+          <span class="export-option-desc">Every weigh-in by date.</span>
+        </button>
+      </div>
+      <span style="font-size:0.74rem; color:var(--text-dim);">
+        Downloads come from the copy already loaded on this device, so they work offline.
+      </span>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn-secondary" data-modal-close>Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- 1. Universal Delete Confirmation Modal -->
+<div id="delete-confirm-modal" class="modal-overlay">
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="delete-confirm-modal-title" style="max-width:380px;">
+    <div class="modal-header">
+      <h2 id="delete-confirm-modal-title">Confirm Deletion</h2>
+      <button type="button" class="icon-btn" data-modal-close>✕</button>
+    </div>
+    <div class="modal-body">
+      <p id="delete-confirm-message" style="font-size:0.86rem; color:var(--text-muted); line-height:1.45;">
+        Are you sure you want to delete this item? This action cannot be undone.
+      </p>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn-secondary" data-modal-close>Cancel</button>
+      <button type="button" id="confirm-delete-action-btn" class="btn-danger">Confirm Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- 2. Save Favorite Meal Modal -->
+<div id="save-favorite-modal" class="modal-overlay">
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="save-favorite-modal-title" style="max-width:420px;">
+    <div class="modal-header">
+      <h2 id="save-favorite-modal-title">Save Favorite Combo</h2>
+      <button type="button" class="icon-btn" data-modal-close>✕</button>
+    </div>
+    <form id="save-favorite-form">
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="save-favorite-name-input">Favorite Meal Name</label>
+          <input type="text" id="save-favorite-name-input" class="form-input" placeholder="e.g. Protein Shake Combo" required>
+        </div>
+        <div id="save-favorite-items-summary" style="font-size:0.78rem; color:var(--text-muted); background:var(--bg-input); padding:10px 12px; border-radius:var(--radius-md); border:1px solid var(--border);"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-secondary" data-modal-close>Cancel</button>
+        <button type="submit" class="btn-primary">Save Favorite</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- 3. Edit Today's Meal Modal -->
+<div id="edit-today-meal-modal" class="modal-overlay">
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="edit-today-meal-modal-title">
+    <div class="modal-header">
+      <h2 id="edit-today-meal-modal-title">Edit Today's Meal</h2>
+      <button type="button" class="icon-btn" data-modal-close>✕</button>
+    </div>
+    <form id="edit-today-meal-form">
+      <div class="modal-body">
+        <input type="hidden" id="edit-today-meal-id">
+        <div class="form-group">
+          <label>Meal Name</label>
+          <input type="text" id="edit-today-meal-name" class="form-input" required>
+        </div>
+        <div id="edit-today-meal-items-container" style="display:flex; flex-direction:column; gap:8px;"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-secondary" data-modal-close>Cancel</button>
+        <button type="submit" class="btn-primary">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- 4. Edit Past History Log Modal -->
+<div id="edit-history-log-modal" class="modal-overlay">
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="edit-history-log-modal-title">
+    <div class="modal-header">
+      <h2 id="edit-history-log-modal-title">Edit Past History Log</h2>
+      <button type="button" class="icon-btn" data-modal-close>✕</button>
+    </div>
+    <form id="edit-history-log-form">
+      <div class="modal-body">
+        <input type="hidden" id="edit-history-log-id">
+        <div class="form-group">
+          <label>Log Session Date</label>
+          <input type="text" id="edit-history-session-date" class="form-input" required>
+        </div>
+        <div class="form-group">
+          <label>Total Kcal</label>
+          <input type="number" inputmode="numeric" id="edit-history-total-kcal" class="form-input" required>
+        </div>
+        <div class="form-row macro-trio">
+          <div class="form-group">
+            <label>Protein (g)</label>
+            <input type="number" inputmode="decimal" step="0.1" id="edit-history-prot" class="form-input" required>
+          </div>
+          <div class="form-group">
+            <label>Carbs (g)</label>
+            <input type="number" inputmode="decimal" step="0.1" id="edit-history-carb" class="form-input" required>
+          </div>
+          <div class="form-group">
+            <label>Fat (g)</label>
+            <input type="number" inputmode="decimal" step="0.1" id="edit-history-fat" class="form-input" required>
+          </div>
+        </div>
+        <div class="form-group" id="edit-history-items-text-group">
+          <label>Items Description</label>
+          <textarea id="edit-history-items-text" rows="4" class="form-input" style="resize:vertical;"></textarea>
+          <span style="font-size:0.72rem; color:var(--text-dim); margin-top:3px;">
+            Free-text list for this older log. Totals above are not calculated from it.
+          </span>
+        </div>
+        <div id="edit-history-items-structured-note" style="display:none; font-size:0.75rem; color:var(--text-muted); background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-md); padding:10px 12px; line-height:1.5;">
+          This day has a detailed food breakdown. Close this window and use the
+          <strong style="color:var(--text-main);">pencil icon on any food</strong> to edit it individually &mdash;
+          the day totals above recalculate automatically from the foods.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-secondary" data-modal-close>Cancel</button>
+        <button type="submit" class="btn-primary">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- 4b. Edit Single Food Inside a Past Day Log -->
+<div id="edit-history-item-modal" class="modal-overlay">
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="edit-history-item-modal-title" style="max-width:440px;">
+    <div class="modal-header">
+      <h2 id="edit-history-item-modal-title">Edit Food Item</h2>
+      <button type="button" class="icon-btn" data-modal-close>✕</button>
+    </div>
+    <form id="edit-history-item-form">
+      <div class="modal-body">
+        <input type="hidden" id="edit-hist-item-log-id">
+        <input type="hidden" id="edit-hist-item-meal-idx">
+        <input type="hidden" id="edit-hist-item-idx">
+        <div id="edit-hist-item-context" style="font-size:0.75rem; color:var(--text-muted); margin-bottom:2px;"></div>
+        <div class="form-group">
+          <label for="edit-hist-item-name">Food Name</label>
+          <input type="text" id="edit-hist-item-name" class="form-input" required>
+        </div>
+        <div class="form-group">
+          <label for="edit-hist-item-qty">Quantity (g)</label>
+          <input type="number" inputmode="decimal" step="0.1" id="edit-hist-item-qty" class="form-input" required>
+          <span style="font-size:0.72rem; color:var(--text-dim); margin-top:3px;">
+            Changing the quantity rescales the macros below automatically.
+          </span>
+        </div>
+        <div class="form-group">
+          <label for="edit-hist-item-kcal">Kcal</label>
+          <input type="number" inputmode="numeric" step="1" id="edit-hist-item-kcal" class="form-input" required>
+        </div>
+        <div class="form-row macro-trio">
+          <div class="form-group">
+            <label for="edit-hist-item-prot">Protein (g)</label>
+            <input type="number" inputmode="decimal" step="0.1" id="edit-hist-item-prot" class="form-input" required>
+          </div>
+          <div class="form-group">
+            <label for="edit-hist-item-carb">Carbs (g)</label>
+            <input type="number" inputmode="decimal" step="0.1" id="edit-hist-item-carb" class="form-input" required>
+          </div>
+          <div class="form-group">
+            <label for="edit-hist-item-fat">Fat (g)</label>
+            <input type="number" inputmode="decimal" step="0.1" id="edit-hist-item-fat" class="form-input" required>
+          </div>
+        </div>
+        <span style="font-size:0.74rem; color:var(--text-dim);">
+          Saving recalculates this meal's subtotal, the day's totals, the weekly chart and Supabase.
+        </span>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-secondary" data-modal-close>Cancel</button>
+        <button type="submit" class="btn-primary">Save Food</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- 5. Favorites Modal -->
+<div id="favorites-modal" class="modal-overlay">
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="favorites-modal-title">
+    <div class="modal-header">
+      <h2 id="favorites-modal-title">Favorite Combos</h2>
+      <button type="button" class="icon-btn" data-modal-close>✕</button>
+    </div>
+    <div class="modal-body" id="favorites-list-modal-body" style="gap:8px;"></div>
+  </div>
+</div>
+
+<!-- 6. Target Macros Settings Modal -->
+<div id="targets-modal" class="modal-overlay">
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="targets-modal-title">
+    <div class="modal-header">
+      <h2 id="targets-modal-title">Daily Macro Targets</h2>
+      <button type="button" class="icon-btn" data-modal-close>✕</button>
+    </div>
+    <form id="target-macros-form">
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Daily Kcal Target</label>
+          <input type="number" inputmode="numeric" id="target-kcal-input" class="form-input" required>
+        </div>
+        <div class="form-row macro-trio">
+          <div class="form-group">
+            <label>Protein (g)</label>
+            <input type="number" inputmode="numeric" id="target-prot-input" class="form-input" required>
+          </div>
+          <div class="form-group">
+            <label>Carbs (g)</label>
+            <input type="number" inputmode="numeric" id="target-carb-input" class="form-input" required>
+          </div>
+          <div class="form-group">
+            <label>Fat (g)</label>
+            <input type="number" inputmode="numeric" id="target-fat-input" class="form-input" required>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-secondary" data-modal-close>Cancel</button>
+        <button type="submit" class="btn-primary">Save Targets</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- 7. Supabase Auth / Connection Modal -->
+<div id="auth-login-modal" class="modal-overlay">
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="auth-login-modal-title" style="max-width:480px;">
+    <div class="modal-header">
+      <h2 id="auth-login-modal-title">Supabase Cloud Connection</h2>
+      <button type="button" class="icon-btn" data-modal-close>✕</button>
+    </div>
+    <div class="modal-body" style="display:flex; flex-direction:column; gap:12px;">
+      <div id="supabase-status-indicator-box" style="background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-md); padding:12px; font-size:0.8rem;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span id="modal-sync-dot" class="sync-circle-dot" style="background:var(--success); box-shadow:0 0 6px var(--success);"></span>
+            <strong id="modal-sync-title" style="color:var(--text-main);">Connected to Supabase</strong>
+          </div>
+          <button type="button" class="btn-secondary" style="padding:4px 10px; font-size:0.72rem;" onclick="app.testSupabaseConnection()">Test Tables</button>
+        </div>
+        <div id="modal-sync-subtitle" style="margin-top:6px; font-size:0.75rem; color:var(--text-muted); word-break:break-all;">
+          Project URL: <code id="modal-project-url-display">not connected</code>
+        </div>
+        <div id="supabase-diagnostics-results" style="margin-top:8px; font-size:0.74rem; display:none; flex-direction:column; gap:4px; border-top:1px solid var(--border); padding-top:8px;"></div>
+      </div>
+      <form id="supabase-auth-form" style="display:flex; flex-direction:column; gap:10px;">
+        <div class="form-group">
+          <label>Account Email</label>
+          <input type="email" id="auth-email-input" class="form-input" placeholder="name@example.com">
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="auth-password-input" class="form-input" placeholder="••••••••">
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button type="submit" class="btn-primary" style="flex:1;">Sign In & Sync</button>
+          <button type="button" id="modal-signup-btn" class="btn-secondary" style="flex:1;" onclick="app.handleModalSignUp()">Create Account</button>
+        </div>
+      </form>
+      <details style="background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-md); padding:10px 12px; font-size:0.78rem; color:var(--text-muted);">
+        <summary style="cursor:pointer; font-weight:600; color:var(--text-main); user-select:none;">Advanced: Supabase API Keys & URL</summary>
+        <div style="margin-top:10px; display:flex; flex-direction:column; gap:8px;">
+          <div>
+            <label style="font-size:0.72rem; color:var(--text-dim); display:block; margin-bottom:2px;">Supabase Project URL</label>
+            <input type="text" id="config-supabase-url" class="form-input" style="font-size:0.75rem; font-family:var(--font-mono);" value="">
+          </div>
+          <div>
+            <label style="font-size:0.72rem; color:var(--text-dim); display:block; margin-bottom:2px;">Supabase Anon / Service Role Key</label>
+            <input type="text" id="config-supabase-key" class="form-input" style="font-size:0.75rem; font-family:var(--font-mono);" value="">
+          </div>
+          <button type="button" class="btn-secondary" style="padding:6px 12px; align-self:flex-start;" onclick="app.saveCustomSupabaseConfig()">Save Custom Keys & Reconnect</button>
+        </div>
+      </details>
+    </div>
+    <div class="modal-footer" style="display:flex; justify-content:space-between; align-items:center;">
+      <button type="button" class="btn-secondary" data-modal-close>Close</button>
+      <button type="button" class="btn-primary" onclick="app.triggerCloudSync()">Sync All Data Now</button>
+    </div>
+  </div>
+</div>
+
+<!-- 8. Select Day Before Logging Modal -->
+<div id="log-day-modal" class="modal-overlay">
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="log-day-modal-title" style="max-width:420px;">
+    <div class="modal-header">
+      <h2 id="log-day-modal-title">Log & Archive Day</h2>
+      <button type="button" class="icon-btn" data-modal-close>✕</button>
+    </div>
+    <form id="log-day-archive-form">
+      <div class="modal-body">
+        <div style="background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-md); padding:10px 12px; font-size:0.82rem;">
+          <div style="font-weight:700; color:var(--text-main); margin-bottom:4px;">Day Totals to Archive</div>
+          <div id="log-day-modal-totals" style="color:var(--accent); font-family:var(--font-mono); font-size:0.86rem; font-weight:700;">
+            0 kcal • P: 0g • C: 0g • F: 0g
+          </div>
+          <div id="log-day-modal-meals-summary" style="font-size:0.75rem; color:var(--text-muted); margin-top:4px;">
+            0 meals logged
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="log-day-date-picker">Select Date for this Log</label>
+          <input type="date" id="log-day-date-picker" class="form-input" required>
+          <span style="font-size:0.74rem; color:var(--text-dim); margin-top:3px;">
+            You can log for today or assign this log to a past/custom date.
+          </span>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-secondary" data-modal-close>Cancel</button>
+        <button type="submit" class="btn-primary">Confirm & Archive Day</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- 9. Save New Food to Food List Modal -->
+<div id="save-food-db-modal" class="modal-overlay">
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="save-food-modal-title" style="max-width:440px;">
+    <div class="modal-header">
+      <h2 id="save-food-modal-title">Save to Food List</h2>
+      <button type="button" class="icon-btn" data-modal-close>✕</button>
+    </div>
+    <form id="save-food-db-form">
+      <div class="modal-body">
+        <input type="hidden" id="save-food-row-id">
+        <input type="hidden" id="save-food-edit-id">
+        <input type="hidden" id="save-food-barcode">
+        <span id="save-food-barcode-hint" class="save-food-barcode-hint" style="display:none;"></span>
+        <div class="form-group">
+          <label for="save-food-name-input">Food Item Name</label>
+          <input type="text" id="save-food-name-input" class="form-input" placeholder="e.g. Greek Yogurt, Oats" required>
+        </div>
+        <div class="form-group">
+          <label for="save-food-base-qty-input">Base Serving Size (g)</label>
+          <input type="number" inputmode="numeric" id="save-food-base-qty-input" class="form-input" value="100" required>
+        </div>
+        <div class="form-group">
+          <label for="save-food-kcal-input">Kcal</label>
+          <input type="number" inputmode="numeric" step="1" id="save-food-kcal-input" class="form-input" placeholder="0" required>
+        </div>
+        <div class="form-row macro-trio">
+          <div class="form-group">
+            <label for="save-food-prot-input">Protein (g)</label>
+            <input type="number" inputmode="decimal" step="0.1" id="save-food-prot-input" class="form-input" placeholder="0.0" required>
+          </div>
+          <div class="form-group">
+            <label for="save-food-carb-input">Carbs (g)</label>
+            <input type="number" inputmode="decimal" step="0.1" id="save-food-carb-input" class="form-input" placeholder="0.0" required>
+          </div>
+          <div class="form-group">
+            <label for="save-food-fat-input">Fat (g)</label>
+            <input type="number" inputmode="decimal" step="0.1" id="save-food-fat-input" class="form-input" placeholder="0.0" required>
+          </div>
+        </div>
+        <span style="font-size:0.74rem; color:var(--text-dim);">
+          This food will be saved to your Food List and Supabase cloud for future auto-complete.
+        </span>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-secondary" data-modal-close>Cancel</button>
+        <button type="submit" class="btn-primary" id="save-food-submit-btn">Save to Food List &amp; Use</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Barcode Scanner Modal -->
+<div id="barcode-scanner-modal" class="modal-overlay">
+  <div class="modal-box barcode-scanner-box" role="dialog" aria-modal="true" aria-labelledby="barcode-scanner-modal-title" style="max-width:440px;">
+    <div class="modal-header">
+      <h2 id="barcode-scanner-modal-title">Scan Barcode</h2>
+      <button type="button" class="icon-btn" data-modal-close aria-label="Close">✕</button>
+    </div>
+    <div class="modal-body">
+      <!-- The camera with its controls laid over it. The buttons sit beside
+           the preview rather than inside it, so tapping one never also
+           counts as a tap-to-focus on the video. -->
+      <div class="barcode-viewfinder">
+        <div class="barcode-video-wrap" onclick="app.focusAtPoint(event)" title="Tap to focus here">
+          <video id="barcode-video" playsinline muted autoplay></video>
+          <div class="barcode-reticle"><span class="barcode-reticle-line"></span></div>
+          <svg class="barcode-no-camera-icon" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="1" y1="1" x2="23" y2="23"></line><path d="M21 21H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3m3-3h6l2 3h4a2 2 0 0 1 2 2v9.34m-7.72-2.06a4 4 0 1 1-5.56-5.56"></path></svg>
+          <div id="barcode-scan-status" class="barcode-scan-status" role="status">Starting camera...</div>
+        </div>
+        <div class="barcode-cam-buttons">
+          <button type="button" id="barcode-switch-cam-btn" class="barcode-cam-btn" style="display:none;" onclick="app.switchCamera()"
+                  title="Try another lens" aria-label="Try another lens">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"></path><path d="M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+          </button>
+          <button type="button" id="barcode-torch-btn" class="barcode-cam-btn" style="display:none;" onclick="app.toggleScannerTorch()"
+                  title="Torch" aria-label="Torch" aria-pressed="false">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2h6l-1 7h4l-8 13 2-9H8z"></path></svg>
+          </button>
+        </div>
+      </div>
+
+      <div id="barcode-zoom-row" class="barcode-zoom-row" style="display:none;">
+        <label for="barcode-zoom-slider" title="Zoom" aria-label="Zoom">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.2" y2="16.2"></line><line x1="11" y1="8" x2="11" y2="14"></line><line x1="8" y1="11" x2="14" y2="11"></line></svg>
+        </label>
+        <input type="range" id="barcode-zoom-slider" class="barcode-zoom-slider"
+               oninput="app.applyZoom(this.value)">
+        <span id="barcode-zoom-value" class="barcode-zoom-value"></span>
+      </div>
+
+      <form class="barcode-manual-entry" onsubmit="event.preventDefault(); app.handleManualBarcodeSubmit();">
+        <label for="manual-barcode-input" class="barcode-or"><span>or type the digits under the barcode</span></label>
+        <div class="barcode-manual-row">
+          <input type="text" id="manual-barcode-input" class="form-input" inputmode="numeric"
+                 autocomplete="off" enterkeyhint="search"
+                 data-no-autofocus placeholder="e.g. 3017620422003">
+          <button type="submit" class="btn-primary">Look Up</button>
+        </div>
+      </form>
+
+      <details class="barcode-help">
+        <summary>Won't focus?</summary>
+        <p>Tap the preview to refocus on the barcode. Still blurry? The <strong>lens</strong> button tries another camera &mdash; phones often start on a wide or zoom lens that cannot focus up close. Or step back and use zoom.</p>
+        <div id="barcode-camera-info" class="barcode-camera-info"></div>
+      </details>
+    </div>
+  </div>
+</div>
+
+<!-- Barcode Result Modal -->
+<div id="barcode-result-modal" class="modal-overlay">
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="barcode-result-modal-title" style="max-width:420px;">
+    <div class="modal-header">
+      <h2 id="barcode-result-modal-title">Product Found</h2>
+      <button type="button" class="icon-btn" data-modal-close>✕</button>
+    </div>
+    <div class="modal-body" id="barcode-result-body"></div>
+    <div class="barcode-attribution">Nutrition data from Open Food Facts (ODbL)</div>
+    <div class="modal-footer">
+      <button type="button" id="barcode-save-db-btn" class="btn-secondary" onclick="app.saveScannedFoodToDb()">Save to My Food List</button>
+      <button type="button" class="btn-primary" onclick="app.addScannedFoodToBuilder()">Add to Meal Builder</button>
+    </div>
+  </div>
+</div>
+
+<!-- Barcode Not Found Modal -->
+<div id="barcode-notfound-modal" class="modal-overlay">
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="barcode-notfound-modal-title" style="max-width:400px;">
+    <div class="modal-header">
+      <h2 id="barcode-notfound-modal-title">Barcode Not Found</h2>
+      <button type="button" class="icon-btn" data-modal-close>✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="barcode-notfound-label">The scanner read this code:</div>
+      <div class="barcode-notfound-code" id="barcode-notfound-code"></div>
+      <div class="barcode-notfound-hint">
+        If that does not match the digits printed on the packet, it was a misread — scan again.
+        If it does match, the product simply is not in Open Food Facts yet.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn-secondary" onclick="app.addNotFoundBarcodeManually()">Add Manually</button>
+      <button type="button" class="btn-primary" onclick="app.retryBarcodeScan()">Scan Again</button>
+    </div>
+  </div>
+</div>
+
+<!-- Voice Log Modal -->
+<div id="voice-log-modal" class="modal-overlay">
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="voice-log-modal-title" style="max-width:440px;">
+    <div class="modal-header">
+      <h2 id="voice-log-modal-title">Say What You Ate</h2>
+      <button type="button" class="icon-btn" data-modal-close>✕</button>
+    </div>
+    <div class="modal-body">
+      <button type="button" id="voice-record-btn" class="voice-record-btn" onclick="app.toggleVoiceCapture()" title="Tap to start or stop">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line></svg>
+      </button>
+      <div id="voice-status" class="voice-status">Listening... tap the mic again to stop</div>
+      <div id="voice-transcript" class="voice-transcript"></div>
+      <div class="voice-hint">
+        Foods appear as you speak; the mic stays on until you tap it again.
+        Amounts first, no need for "and": <strong>"150 chicken 5 olive oil 90 basmati rice"</strong>.
+        If it picks the wrong food, correct the name once and it will remember.
+        <button type="button" class="voice-clear-aliases" onclick="app.clearVoiceAliases()">Reset learned names</button>
+      </div>
+      <div id="voice-results" class="parsed-item-list"></div>
+      <button type="button" class="voice-add-food-btn" onclick="app.addManualVoiceItem()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        Add Food
+      </button>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn-secondary" data-modal-close>Cancel</button>
+      <button type="button" id="voice-apply-btn" class="btn-primary" style="display:none;" onclick="app.applyParsedItems()">Add to Builder</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Today's Food Item Modal -->
+<div id="edit-today-item-modal" class="modal-overlay">
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="edit-today-item-modal-title" style="max-width:440px;">
+    <div class="modal-header">
+      <h2 id="edit-today-item-modal-title">Edit Food</h2>
+      <button type="button" class="icon-btn" data-modal-close>✕</button>
+    </div>
+    <form id="edit-today-item-form">
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="edit-today-item-name">Food Name</label>
+          <input type="text" id="edit-today-item-name" class="form-input" required>
+        </div>
+        <div class="form-group">
+          <label for="edit-today-item-qty">Quantity (g)</label>
+          <input type="number" inputmode="decimal" step="0.1" id="edit-today-item-qty" class="form-input" required>
+        </div>
+        <div class="form-group">
+          <label for="edit-today-item-kcal">Kcal</label>
+          <input type="number" inputmode="numeric" step="1" id="edit-today-item-kcal" class="form-input" required>
+        </div>
+        <div class="form-row macro-trio">
+          <div class="form-group">
+            <label for="edit-today-item-prot">Protein (g)</label>
+            <input type="number" inputmode="decimal" step="0.1" id="edit-today-item-prot" class="form-input" required>
+          </div>
+          <div class="form-group">
+            <label for="edit-today-item-carb">Carbs (g)</label>
+            <input type="number" inputmode="decimal" step="0.1" id="edit-today-item-carb" class="form-input" required>
+          </div>
+          <div class="form-group">
+            <label for="edit-today-item-fat">Fat (g)</label>
+            <input type="number" inputmode="decimal" step="0.1" id="edit-today-item-fat" class="form-input" required>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-secondary" data-modal-close>Cancel</button>
+        <button type="submit" class="btn-primary">Save Food</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Toast Container -->
+<div id="toast-container" class="toast-container"></div>
+
+<script src="/config.js"></script>
+<script src="/app.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const dInput = document.getElementById('weight-date-input');
+    if (dInput) {
+      dInput.value = new Date().toISOString().split('T')[0];
+    }
+  });
+</script>
+</body>
+</html>

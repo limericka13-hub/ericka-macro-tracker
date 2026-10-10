@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Macro Tracker">
+  <defs>
+    <!-- Obsidian tile, matching the app's card surfaces -->
+    <linearGradient id="tile" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#16181d"/>
+      <stop offset="100%" stop-color="#08090b"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="112" fill="url(#tile)"/>
+  <rect x="1.5" y="1.5" width="509" height="509" rx="110.5" fill="none" stroke="#23262e" stroke-width="3"/>
+
+  <!-- Three nested progress arcs - protein, carbs, fat - reduced to one colour
+       and told apart by length and weight alone. Outer edge sits at r=167, well
+       inside the 205px maskable safe zone. -->
+  <g fill="none" stroke="#ffffff" stroke-width="30" stroke-linecap="round">
+    <path d="M256 104 A152 152 0 1 1 124.36 180"/>
+    <path d="M256 150 A106 106 0 1 1 203 347.80" opacity="0.55"/>
+    <path d="M256 196 A60 60 0 0 1 307.96 286" opacity="0.28"/>
+  </g>
+</svg>
