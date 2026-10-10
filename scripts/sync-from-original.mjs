@@ -34,9 +34,9 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = path.resolve(ROOT, process.argv[2] || '../../Macro Tracker Project/macro tracker project');
 
 // Copied as-is.
-const VERBATIM = ['styles.css', 'icon.svg', 'server.js', 'vercel.json'];
+const VERBATIM = ['styles.css', 'icon.svg', 'server.js'];
 // Copied, then edited below.
-const PATCHED = ['app.js', 'index.html', 'sw.js', 'build.js', 'manifest.json', 'package.json', 'package-lock.json'];
+const PATCHED = ['app.js', 'index.html', 'sw.js', 'build.js', 'vercel.json', 'manifest.json', 'package.json', 'package-lock.json'];
 // Mirrored whole, so a new serverless function comes across too.
 const DIRS = ['api'];
 // In the original but deliberately not part of this fork.
@@ -151,6 +151,11 @@ function json(file, mutate) {
   const body = JSON.stringify(obj, null, 2).replace(/\n/g, eol);
   out.set(file, src.endsWith('\n') ? body + eol : body);
 }
+// null pins the "Other" preset. A project created on Vercel today sees
+// server.js plus the express dependency and auto-detects Express, which runs
+// every request through server.js - and there express.static finds no files,
+// so the catch-all answers /app.js, /config.js and the rest with index.html.
+json('vercel.json', (v) => { v.framework = null; });
 json('manifest.json', (m) => { m.name = APP.APP_NAME; if (APP.APP_SHORT_NAME) m.short_name = APP.APP_SHORT_NAME; });
 json('package.json', (p) => { p.name = PACKAGE_NAME; });
 json('package-lock.json', (l) => { l.name = PACKAGE_NAME; if (l.packages && l.packages['']) l.packages[''].name = PACKAGE_NAME; });
