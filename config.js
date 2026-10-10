@@ -18,10 +18,9 @@ window.APP_CONFIG = {
   SUPABASE_URL: 'https://azqywzdzlahxvxibgyfa.supabase.co',
   SUPABASE_ANON_KEY: 'sb_publishable_LJRxuFpXDATNfEnJwiJepQ_2RxiCQx1',
 
-  // ---- Shared, free-tier key -----------------------------------------------
-  // The same key as the original app: public data, no personal information,
-  // and ample quota for two people.
-  USDA_API_KEY: 'RFe1YPJI28FNOWHX82BdooszJJaA2hftQ0gUEsbf',
+  // ---- USDA FoodData Central -----------------------------------------------
+  // Her own key from api.data.gov. Free, public data, 3,600 requests an hour.
+  USDA_API_KEY: 'YWV5JBn2ehWHNqvMygGfAgs6tNiEMCQZc3GPVkCS',
 
   // ---- Branding ------------------------------------------------------------
   APP_NAME: "Ericka's Macro Tracker",
