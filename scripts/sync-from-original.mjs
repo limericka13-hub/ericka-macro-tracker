@@ -25,6 +25,7 @@
  */
 import fs from 'fs';
 import path from 'path';
+import { execFileSync } from 'child_process';
 import { fileURLToPath } from 'url';
 
 const CACHE_PREFIX = 'ericka-';
@@ -50,6 +51,19 @@ function fail(msg) {
 if (!fs.existsSync(path.join(SRC, 'app.js'))) {
   fail(`No app.js in ${SRC}.\nPass the original's folder: node scripts/sync-from-original.mjs "<path>"`);
 }
+
+// The original is developed on more than one machine, so the local copy can
+// lag what is already live. Syncing from it would quietly hand this instance
+// an older app than the original's. Skipped when there is no git, no remote
+// or no network - the check is a guard, not a requirement.
+const git = (...args) => execFileSync('git', ['-C', SRC, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+let uncommitted = '';
+try {
+  git('fetch', '--quiet');
+  const behind = Number(git('rev-list', '--count', 'HEAD..@{u}'));
+  if (behind > 0) fail(`The original is ${behind} commit(s) behind its GitHub copy.\nPull it first: git -C "${SRC}" pull`);
+  uncommitted = git('status', '--porcelain');
+} catch (e) { /* not a git checkout, no upstream, or offline */ }
 
 // A file the original gained since the last sync may be something index.html
 // now loads. Copying it blindly and skipping it silently are both wrong.
@@ -204,6 +218,10 @@ console.log(changed.length ? `  updated: ${changed.join(', ')}` : '  already up 
 if (removals.length) console.log(`  removed: ${removals.join(', ')}`);
 console.log(`  cache:   ${(out.get('sw.js').match(/CACHE_NAME = '([^']+)'/) || [])[1]}`);
 if (depsOf(path.join(ROOT, 'package.json')) !== depsBefore) console.log('\nDependencies changed - run npm install.');
+if (uncommitted) {
+  console.log('\nNote: the original has uncommitted changes, and they were synced too. Commit them there');
+  console.log('as well, or the two apps will differ in a way neither history shows.');
+}
 if (/REPLACE_ME/.test(APP.SUPABASE_URL + APP.SUPABASE_ANON_KEY)) {
   console.log("\nNote: config.js still has placeholder Supabase values, so the app won't connect yet.");
 }

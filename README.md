@@ -20,8 +20,9 @@ npm run dev
 
 The script copies the original's files and reapplies this instance's edits
 (config hookup, branding, the original's credentials stripped, its own service
-worker cache). It stops without writing anything if an edit no longer fits or
-the original has a file it doesn't recognise, and it refuses to write anything
+worker cache, the Vercel framework pin). It stops without writing anything if
+the local original is behind its GitHub copy, an edit no longer fits, or the
+original has a file it doesn't recognise, and it refuses to write anything
 containing the original's Supabase project. Check locally, then commit and push;
 Vercel deploys on push.
 
